@@ -2,7 +2,7 @@
 
 # Market Screener & Short-Term Opportunities Dashboard
 
-https://screener-bourse-florian-kovacevic.streamlit.app/
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://screener-bourse-florian-kovacevic.streamlit.app/)
 
 Live demo and interactive financial screener built to detect daily short-term trading opportunities, oversold stocks, and bounce signals across S&P 500 sectors.
 
