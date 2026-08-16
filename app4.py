@@ -1,7 +1,7 @@
 """
-================================================================================
+=================================================================
  PRO SCREENER — Opportunités Court Terme & Rebond (Multi-Marchés)
-================================================================================
+=================================================================
 Application Streamlit pour détecter des actions/cryptos en survente présentant
 un volume anormal et des signaux techniques de rebond, sur n'importe quel
 marché : indices US (S&P 500, Nasdaq 100, Dow 30), indices européens
@@ -15,7 +15,6 @@ Architecture :
   4. Moteur de scoring d'opportunité
   5. Pipeline de récupération & d'analyse des données (mise en cache)
   6. Interface utilisateur (sidebar, KPIs, spotlight, onglets)
-================================================================================
 """
 
 import io
