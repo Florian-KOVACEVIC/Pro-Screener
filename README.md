@@ -1,4 +1,4 @@
-# Screener-bourse
+# Pro-Screener
 
 # Market Screener & Short-Term Opportunities Dashboard
 
