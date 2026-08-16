@@ -1,7 +1,10 @@
-streamlit>=1.30.0
-yfinance>=0.2.35
-pandas>=2.0.0
-numpy>=1.24.0
-plotly>=5.18.0
-lxml>=4.9.0
+streamlit>=1.55
+yfinance>=0.2.40
+pandas>=2.0
+numpy>=1.26
+plotly>=5.20
+requests>=2.31
+lxml>=5.0
 html5lib>=1.1
+beautifulsoup4>=4.12
+openpyxl>=3.1
