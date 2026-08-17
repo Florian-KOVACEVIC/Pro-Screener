@@ -1,7 +1,7 @@
 """
-=================================================================
- PRO SCREENER — Opportunités Court Terme & Rebond (Multi-Marchés)
-=================================================================
+================================================================================
+ PRO SCREENER : Opportunites Court Terme et Rebond (Multi-Marches)
+================================================================================
 Application Streamlit pour détecter des actions/cryptos en survente présentant
 un volume anormal et des signaux techniques de rebond, sur n'importe quel
 marché : indices US (S&P 500, Nasdaq 100, Dow 30), indices européens
@@ -15,6 +15,7 @@ Architecture :
   4. Moteur de scoring d'opportunité
   5. Pipeline de récupération & d'analyse des données (mise en cache)
   6. Interface utilisateur (sidebar, KPIs, spotlight, onglets)
+================================================================================
 """
 
 import io
@@ -35,7 +36,7 @@ from plotly.subplots import make_subplots
 # 1. CONFIGURATION DE PAGE & STYLE
 # ══════════════════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Pro Screener — Multi-Marchés",
+    page_title="Pro Screener, Multi-Marches",
     page_icon="▣",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -89,8 +90,19 @@ def inject_style() -> None:
         .hero-badge{ display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em;
                       color:var(--emerald); background:var(--emerald-soft); border:1px solid rgba(34,197,94,.35);
                       border-radius:999px; padding:4px 12px; margin-bottom:12px; text-transform:uppercase; }
-        .hero h1{ font-size:2rem; margin:0 0 6px 0; }
+        .hero h1{ font-size:2.1rem; margin:0 0 6px 0; }
         .hero p{ color:var(--text-lo); font-size:.98rem; max-width:760px; margin:0; }
+
+        /* ---------- Titres en dégradé ---------- */
+        .gradient-text{
+            background:linear-gradient(90deg,#F0466E 0%,#FF6A45 45%,#F5A623 100%);
+            -webkit-background-clip:text; background-clip:text; color:transparent !important;
+            display:inline-block;
+        }
+
+        /* ---------- Disclaimer centré et discret ---------- */
+        .disclaimer{ max-width:680px; margin:40px auto 12px auto; text-align:center;
+                      color:var(--text-lo); font-size:.74rem; line-height:1.6; opacity:.75; }
 
         /* ---------- Metrics ---------- */
         [data-testid="stMetric"]{ background:var(--bg-card); border:1px solid var(--border); border-radius:14px;
@@ -99,12 +111,18 @@ def inject_style() -> None:
         [data-testid="stMetricValue"]{ font-family:'IBM Plex Mono',monospace !important; color:var(--text-hi) !important; }
 
         /* ---------- Spotlight cards ---------- */
-        .opp-card{ background:linear-gradient(160deg,var(--bg-card),var(--bg-panel)); border:1px solid var(--border);
-                    border-radius:16px; padding:16px 18px; height:100%; }
+        .opp-card{ padding:2px 2px 4px 2px; }
         .opp-rank{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-lo); text-transform:uppercase; letter-spacing:.08em; }
         .opp-ticker{ font-family:'Space Grotesk',sans-serif; font-size:1.35rem; font-weight:700; color:var(--text-hi); margin:2px 0 0 0; }
         .opp-name{ color:var(--text-lo); font-size:.82rem; margin-bottom:10px; }
         .opp-price{ font-family:'IBM Plex Mono',monospace; font-size:1.05rem; color:var(--text-hi); }
+
+        /* ---------- Panneaux (graphiques / tableaux) ---------- */
+        .panel-title{ font-family:'Space Grotesk',sans-serif; font-size:1.05rem; font-weight:600;
+                        color:var(--text-hi); margin:0 0 3px 0; padding-left:11px;
+                        border-left:3px solid var(--emerald); }
+        .panel-sub{ color:var(--text-lo); font-size:.8rem; margin:0 0 16px 14px; }
+        [data-testid="stVerticalBlockBorderWrapper"]{ border-radius:16px !important; }
 
         .badge{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600;
                  font-family:'IBM Plex Mono',monospace; margin-right:6px; margin-top:6px; }
@@ -183,7 +201,7 @@ def _standardize(df: pd.DataFrame, ticker_keys, name_keys, sector_keys, clean_do
 
 # ---- Chargeurs d'indices officiels (scraping Wikipedia en direct) ---------
 # NB : par prudence, aucune liste de secours codée en dur n'est utilisée pour
-# les indices officiels ci-dessous — une composition d'indice inventée ou
+# les indices officiels ci-dessous : une composition d'indice inventee ou
 # obsolète serait trompeuse. En cas d'échec du scraping, l'app affiche une
 # erreur claire plutôt que de substituer des données non fiables.
 
@@ -223,7 +241,66 @@ def load_ftse100() -> pd.DataFrame:
     return _standardize(t, ["ticker"], ["company"], ["sector", "industry", "ftse industry"], clean_dot=False)
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def load_nikkei225() -> pd.DataFrame:
+    t = _best_wiki_table("https://en.wikipedia.org/wiki/Nikkei_225", ["code", "ticker"], ["company", "name"])
+    return _standardize(t, ["code", "ticker"], ["company", "name"], ["sector", "industry"], clean_dot=False)
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def load_hangseng() -> pd.DataFrame:
+    t = _best_wiki_table("https://en.wikipedia.org/wiki/Hang_Seng_Index", ["ticker", "sehk", "code"], ["constituent", "company", "name"])
+    df = _standardize(t, ["ticker", "sehk", "code"], ["constituent", "company", "name"], ["sector", "industry"], clean_dot=False)
+    df["Symbol"] = df["Symbol"].str.extract(r"(\d+)")[0].str.zfill(4)
+    return df.dropna(subset=["Symbol"]).drop_duplicates(subset="Symbol").reset_index(drop=True)
+
+
 # ---- Listes curées (explicitement non-officielles, usage illustratif) -----
+
+def load_kospi_leaders() -> pd.DataFrame:
+    """Sélection maison des plus grandes capitalisations cotées au KOSPI.
+    Non exhaustive : Wikipedia ne publie pas de tableau complet et fiable des
+    ~800 composants du KOSPI, contrairement au Nikkei 225 ou au Hang Seng."""
+    data = [
+        ("005930.KS", "Samsung Electronics", "Semi-conducteurs / Electronique"),
+        ("000660.KS", "SK Hynix", "Semi-conducteurs"),
+        ("373220.KS", "LG Energy Solution", "Batteries / Energie"),
+        ("207940.KS", "Samsung Biologics", "Santé / Biotech"),
+        ("005380.KS", "Hyundai Motor", "Automobile"),
+        ("000270.KS", "Kia", "Automobile"),
+        ("006400.KS", "Samsung SDI", "Batteries / Energie"),
+        ("051910.KS", "LG Chem", "Chimie / Batteries"),
+        ("005490.KS", "POSCO Holdings", "Acier / Matériaux"),
+        ("035420.KS", "Naver", "Internet"),
+        ("035720.KS", "Kakao", "Internet"),
+        ("068270.KS", "Celltrion", "Santé / Biotech"),
+        ("105560.KS", "KB Financial Group", "Finance"),
+        ("055550.KS", "Shinhan Financial Group", "Finance"),
+    ]
+    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
+
+def load_asia_tech_leaders() -> pd.DataFrame:
+    """Sélection maison de grandes valeurs technologiques asiatiques
+    (Japon, Corée, Taïwan, Chine / Hong Kong)."""
+    data = [
+        ("TSM", "Taiwan Semiconductor (ADR)", "Semi-conducteurs"),
+        ("2317.TW", "Hon Hai / Foxconn", "Electronique"),
+        ("2454.TW", "MediaTek", "Semi-conducteurs"),
+        ("005930.KS", "Samsung Electronics", "Semi-conducteurs / Electronique"),
+        ("000660.KS", "SK Hynix", "Semi-conducteurs"),
+        ("035420.KS", "Naver", "Internet"),
+        ("035720.KS", "Kakao", "Internet"),
+        ("9984.T", "SoftBank Group", "Tech / Investissement"),
+        ("6758.T", "Sony Group", "Electronique / Divertissement"),
+        ("BABA", "Alibaba (ADR)", "E-commerce / Cloud"),
+        ("JD", "JD.com (ADR)", "E-commerce"),
+        ("BIDU", "Baidu (ADR)", "IA / Internet"),
+        ("PDD", "PDD Holdings (ADR)", "E-commerce"),
+        ("0700.HK", "Tencent", "Internet / Gaming"),
+        ("SE", "Sea Limited (ADR)", "Internet / Gaming"),
+    ]
+    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
 def load_tech_trending() -> pd.DataFrame:
     data = [
@@ -261,22 +338,32 @@ def load_crypto_top() -> pd.DataFrame:
 
 
 MARKETS: dict[str, MarketConfig] = {
-    "sp500": MarketConfig("sp500", "🇺🇸 S&P 500", load_sp500, "", "$", "Secteur GICS"),
-    "nasdaq100": MarketConfig("nasdaq100", "🇺🇸 Nasdaq 100", load_nasdaq100, "", "$", "Secteur GICS"),
-    "dow30": MarketConfig("dow30", "🇺🇸 Dow Jones 30", load_dow30, "", "$", "Industrie"),
-    "cac40": MarketConfig("cac40", "🇫🇷 CAC 40", load_cac40, ".PA", "€", "Secteur"),
-    "dax40": MarketConfig("dax40", "🇩🇪 DAX 40", load_dax40, ".DE", "€", "Secteur"),
-    "ftse100": MarketConfig("ftse100", "🇬🇧 FTSE 100", load_ftse100, ".L", "£", "Secteur"),
+    "sp500": MarketConfig("sp500", "S&P 500 (Etats-Unis)", load_sp500, "", "$", "Secteur GICS"),
+    "nasdaq100": MarketConfig("nasdaq100", "Nasdaq 100 (Etats-Unis)", load_nasdaq100, "", "$", "Secteur GICS"),
+    "dow30": MarketConfig("dow30", "Dow Jones 30 (Etats-Unis)", load_dow30, "", "$", "Industrie"),
+    "cac40": MarketConfig("cac40", "CAC 40 (France)", load_cac40, ".PA", "€", "Secteur"),
+    "dax40": MarketConfig("dax40", "DAX 40 (Allemagne)", load_dax40, ".DE", "€", "Secteur"),
+    "ftse100": MarketConfig("ftse100", "FTSE 100 (Royaume-Uni)", load_ftse100, ".L", "£", "Secteur"),
+    "nikkei225": MarketConfig("nikkei225", "Nikkei 225 (Japon)", load_nikkei225, ".T", "¥", "Secteur"),
+    "hangseng": MarketConfig("hangseng", "Hang Seng (Hong Kong)", load_hangseng, ".HK", "HK$", "Secteur"),
+    "kospi": MarketConfig(
+        "kospi", "Kospi, grandes capitalisations (Corée)", load_kospi_leaders, "", "₩", "Secteur", is_curated=True,
+        note="Sélection maison des plus grandes valeurs du KOSPI, liste non exhaustive.",
+    ),
+    "asia_tech": MarketConfig(
+        "asia_tech", "Asie, leaders tech", load_asia_tech_leaders, "", "$", "Pays / Thématique", is_curated=True,
+        note="Sélection maison de grandes valeurs technologiques asiatiques (Japon, Corée, Taïwan, Chine).",
+    ),
     "tech_ai": MarketConfig(
-        "tech_ai", "🚀 Tech & IA en vogue", load_tech_trending, "", "$", "Thématique", is_curated=True,
-        note="Sélection maison de grandes valeurs tech/IA — pas un indice officiel.",
+        "tech_ai", "Tech & IA en vogue", load_tech_trending, "", "$", "Thématique", is_curated=True,
+        note="Sélection maison de grandes valeurs tech/IA, pas un indice officiel.",
     ),
     "crypto": MarketConfig(
         "crypto", "₿ Cryptomonnaies (Top 26)", load_crypto_top, "", "$", "Catégorie", is_curated=True,
-        note="Sélection maison des cryptos majeures — vérifiez que chaque ticker est bien coté sur Yahoo Finance.",
+        note="Sélection maison des cryptos majeures, vérifiez que chaque ticker est bien coté sur Yahoo Finance.",
     ),
     "custom": MarketConfig(
-        "custom", "🔧 Marché personnalisé", None, "", "$", "Groupe", is_curated=True,
+        "custom", "Marché personnalisé", None, "", "$", "Groupe", is_curated=True,
         note="Saisissez vos propres tickers, au format reconnu par Yahoo Finance.",
     ),
 }
@@ -344,7 +431,7 @@ def compute_score(rsi, price, boll_low, vol_ratio, macd_hist_prev, macd_hist_las
 
 def _extract_frame(data: pd.DataFrame, symbol: str, n_tickers: int) -> pd.DataFrame:
     """yfinance ne renvoie pas toujours un MultiIndex quand un seul ticker
-    est demandé — on gère les deux cas."""
+    est demandé, on gère les deux cas."""
     if n_tickers > 1 and isinstance(data.columns, pd.MultiIndex):
         return data[symbol].dropna()
     return data.dropna()
@@ -362,7 +449,7 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
         return pd.DataFrame(), f"{e}"
 
     if data is None or data.empty:
-        return pd.DataFrame(), "Aucune donnée reçue (marché fermé, tickers invalides ou accès réseau limité)."
+        return pd.DataFrame(), "Aucune donnée reçue (tickers invalides ou délistés, limite de requêtes Yahoo Finance, ou accès réseau restreint)."
 
     rows = []
     for symbol in symbols:
@@ -411,9 +498,9 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# 5. SIDEBAR — SÉLECTION DU MARCHÉ & FILTRES
+# 5. SIDEBAR : SELECTION DU MARCHE ET FILTRES
 # ══════════════════════════════════════════════════════════════════════════
-st.sidebar.markdown("## 🧭 Marché & univers")
+st.sidebar.markdown("## Marché et univers")
 market_key = st.sidebar.selectbox(
     "Marché à analyser", list(MARKETS.keys()), format_func=lambda k: MARKETS[k].label,
 )
@@ -432,7 +519,7 @@ if market.key == "custom":
     universe_df = pd.DataFrame({"Symbol": tickers_raw, "Nom": tickers_raw, "Groupe": "Personnalisé"})
 else:
     try:
-        with st.spinner(f"Chargement de la composition — {market.label}..."):
+        with st.spinner(f"Chargement de la composition : {market.label}..."):
             universe_df = market.loader()
     except Exception as e:
         st.sidebar.error(f"Impossible de charger la composition du marché : {e}")
@@ -441,12 +528,12 @@ else:
 st.sidebar.caption(f"{len(universe_df)} titres dans l'univers sélectionné")
 st.sidebar.markdown("---")
 
-st.sidebar.markdown("## 🎯 Profil & filtres")
+st.sidebar.markdown("## Profil et filtres")
 
 PRESETS = {
-    "🛡️ Conservateur": {"score": 60, "rsi": 30},
-    "⚖️ Modéré": {"score": 40, "rsi": 35},
-    "🔥 Agressif": {"score": 25, "rsi": 45},
+    "Conservateur": {"score": 60, "rsi": 30},
+    "Modéré": {"score": 40, "rsi": 35},
+    "Agressif": {"score": 25, "rsi": 45},
 }
 
 
@@ -460,7 +547,7 @@ def _apply_preset():
 st.session_state.setdefault("min_score", 40)
 st.session_state.setdefault("rsi_max", 35)
 st.sidebar.radio(
-    "Profil de risque", list(PRESETS.keys()) + ["🎛️ Personnalisé"],
+    "Profil de risque", list(PRESETS.keys()) + ["Personnalisé"],
     key="preset_choice", on_change=_apply_preset, index=1,
 )
 
@@ -470,14 +557,14 @@ with st.sidebar.expander("Critères de sélection", expanded=True):
     min_score = st.slider("Score Opportunité Min.", 0, 100, step=5, key="min_score")
     rsi_max = st.slider("RSI Max (zone de survente)", 10, 50, key="rsi_max")
     volume_filter = st.checkbox("Volume ≥ moyenne 20 jours (≥ 1.0x)", value=True)
-    search_query = st.text_input("🔎 Rechercher un ticker / nom", "")
+    search_query = st.text_input("Rechercher un ticker ou un nom", "")
 
 with st.sidebar.expander("Affichage"):
     max_rows = st.select_slider("Résultats affichés (max.)", options=[10, 20, 50, 100, "Tous"], value=50)
     sort_col = st.selectbox("Trier par", ["Score Opp.", "RSI (14)", "Var. 1J (%)", "Ratio Vol."], index=0)
 
 st.sidebar.markdown("---")
-if st.sidebar.button("🔄 Rafraîchir les données", width="stretch"):
+if st.sidebar.button("Rafraîchir les données", width="stretch"):
     fetch_and_analyze.clear()
     st.rerun()
 st.sidebar.caption(f"Dernière analyse : {dt.datetime.now().strftime('%d/%m/%Y %H:%M')}")
@@ -488,7 +575,7 @@ st.sidebar.caption(f"Dernière analyse : {dt.datetime.now().strftime('%d/%m/%Y %
 if len(universe_df) == 0:
     st.markdown(
         '<div class="hero"><div class="hero-badge">EN ATTENTE</div>'
-        "<h1>Screener d'Opportunités — Court Terme & Rebond</h1>"
+        "<h1 class=\"gradient-text\">Screener d'Opportunités, Court Terme et Rebond</h1>"
         '<p>Sélectionnez un marché ou saisissez des tickers personnalisés dans la barre latérale pour démarrer l\'analyse.</p></div>',
         unsafe_allow_html=True,
     )
@@ -498,7 +585,7 @@ symbols = (universe_df["Symbol"].astype(str) + market.suffix).tolist()
 names_map = dict(zip(symbols, universe_df["Nom"]))
 groups_map = dict(zip(symbols, universe_df["Groupe"]))
 
-with st.spinner(f"Analyse de {len(symbols)} titres — {market.label}..."):
+with st.spinner(f"Analyse de {len(symbols)} titres : {market.label}..."):
     results_df, fetch_error = fetch_and_analyze(market.key, symbols, names_map, groups_map)
 
 if fetch_error:
@@ -549,10 +636,10 @@ st.markdown(
 st.markdown(
     f"""
     <div class="hero">
-      <div class="hero-badge">MARCHÉ ACTIF · {market.label}</div>
-      <h1>Screener d'Opportunités — Court Terme & Rebond</h1>
+      <div class="hero-badge">MARCHE ACTIF : {market.label}</div>
+      <h1 class="gradient-text">Screener d'Opportunités, Court Terme et Rebond</h1>
       <p>Détection automatisée des titres en survente, avec volume anormal et signaux techniques
-      de retournement (RSI, Bandes de Bollinger, MACD) — adaptable à tous les marchés.</p>
+      de retournement (RSI, Bandes de Bollinger, MACD), adaptable à tous les marchés.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -564,21 +651,21 @@ st.markdown(
 k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("Univers analysé", len(results_df))
 k2.metric("Opportunités détectées", len(filtered))
-k3.metric("RSI moyen (sélection)", f"{filtered['RSI (14)'].mean():.1f}" if len(filtered) else "—")
-k4.metric("Variation moy. 1J", f"{filtered['Var. 1J (%)'].mean():+.2f}%" if len(filtered) else "—")
-k5.metric("Score moyen", f"{filtered['Score Opp.'].mean():.0f}/100" if len(filtered) else "—")
+k3.metric("RSI moyen (sélection)", f"{filtered['RSI (14)'].mean():.1f}" if len(filtered) else "N/A")
+k4.metric("Variation moy. 1J", f"{filtered['Var. 1J (%)'].mean():+.2f}%" if len(filtered) else "N/A")
+k5.metric("Score moyen", f"{filtered['Score Opp.'].mean():.0f}/100" if len(filtered) else "N/A")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════
-# 11. SPOTLIGHT — TOP 3 OPPORTUNITÉS
+# 11. SPOTLIGHT : TOP 3 OPPORTUNITES
 # ══════════════════════════════════════════════════════════════════════════
 if len(filtered) > 0:
-    st.markdown("#### 🏆 Meilleures opportunités")
+    st.markdown('#### <span class="gradient-text">Meilleures opportunités</span>', unsafe_allow_html=True)
     top3 = filtered.head(3)
     cols = st.columns(len(top3))
     for i, (col, (_, row)) in enumerate(zip(cols, top3.iterrows())):
-        with col:
+        with col, st.container(border=True):
             var_cls = "badge-buy" if row["Var. 1J (%)"] >= 0 else "badge-down"
             badges = f'<span class="badge {var_cls}">Var 1J {row["Var. 1J (%)"]:+.2f}%</span>'
             if row["Sous Bollinger"]:
@@ -586,12 +673,12 @@ if len(filtered) > 0:
             if row["Ratio Vol."] and row["Ratio Vol."] > 1.2:
                 badges += f'<span class="badge badge-neutral">Vol. {row["Ratio Vol."]:.1f}x</span>'
             if row["MACD haussier"]:
-                badges += '<span class="badge badge-buy">MACD ↑</span>'
+                badges += '<span class="badge badge-buy">MACD haussier</span>'
 
             st.markdown(
                 f"""
                 <div class="opp-card">
-                  <div class="opp-rank">#{i+1} OPPORTUNITÉ</div>
+                  <div class="opp-rank">Opportunité n. {i+1}</div>
                   <div class="opp-ticker">{row['Ticker']}</div>
                   <div class="opp-name">{row['Nom']}</div>
                   <div class="opp-price">{market.currency}{row['Prix']:.2f}</div>
@@ -603,7 +690,7 @@ if len(filtered) > 0:
             gauge = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=row["Score Opp."],
-                number={"suffix": "/100", "font": {"size": 20, "color": "#E7ECF5"}},
+                number={"suffix": "/100", "font": {"size": 22, "color": "#E7ECF5"}},
                 gauge={
                     "axis": {"range": [0, 100], "tickwidth": 0, "tickcolor": "rgba(0,0,0,0)"},
                     "bar": {"color": "#22C55E" if row["Score Opp."] >= 60 else "#F5A623"},
@@ -616,7 +703,7 @@ if len(filtered) > 0:
                     ],
                 },
             ))
-            gauge.update_layout(height=110, margin=dict(l=14, r=14, t=6, b=6),
+            gauge.update_layout(height=130, margin=dict(l=16, r=16, t=8, b=4),
                                  paper_bgcolor="rgba(0,0,0,0)", font={"color": "#E7ECF5"})
             st.plotly_chart(gauge, width="stretch", config={"displayModeBar": False},
                              key=f"gauge_{row['Ticker']}")
@@ -627,7 +714,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 # 12. ONGLETS PRINCIPAUX
 # ══════════════════════════════════════════════════════════════════════════
 tab_table, tab_heat, tab_chart, tab_about = st.tabs(
-    ["📋 Sélection", "🗺️ Cartographie sectorielle", "📈 Analyse graphique", "ℹ️ Méthodologie"]
+    ["Sélection", "Cartographie sectorielle", "Analyse graphique", "Méthodologie"]
 )
 
 # ---- Onglet Sélection -------------------------------------------------
@@ -637,28 +724,36 @@ with tab_table:
     else:
         display_df = filtered.drop(columns=["_history"]).copy()
         display_df["Lien"] = "https://finance.yahoo.com/quote/" + display_df["Ticker"]
-        display_df["Sous Bollinger"] = display_df["Sous Bollinger"].map({True: "Oui 🟢", False: "Non"})
-        display_df["MACD haussier"] = display_df["MACD haussier"].map({True: "Oui 🟢", False: "—"})
+        display_df["Sous Bollinger"] = display_df["Sous Bollinger"].map({True: "Oui", False: "Non"})
+        display_df["MACD haussier"] = display_df["MACD haussier"].map({True: "Oui", False: "Non"})
 
-        st.dataframe(
-            display_df,
-            width="stretch",
-            hide_index=True,
-            column_config={
-                "Score Opp.": st.column_config.ProgressColumn(format="%d/100", min_value=0, max_value=100),
-                "Prix": st.column_config.NumberColumn(format=f"{market.currency} %.2f"),
-                "Var. 1J (%)": st.column_config.NumberColumn(format="%.2f %%"),
-                "Var. 5J (%)": st.column_config.NumberColumn(format="%.2f %%"),
-                "Ratio Vol.": st.column_config.NumberColumn(format="%.2f x"),
-                "% vs Bas (période)": st.column_config.NumberColumn(format="%.1f %%"),
-                "Lien": st.column_config.LinkColumn("Fiche", display_text="Voir ↗"),
-            },
-        )
+        with st.container(border=True):
+            st.markdown('<div class="panel-title">Tableau des opportunités</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="panel-sub">{len(display_df)} titre(s) correspondant aux critères, triés par {sort_col.lower()}</div>',
+                unsafe_allow_html=True,
+            )
+            st.dataframe(
+                display_df,
+                width="stretch",
+                height=min(70 + 36 * len(display_df), 620),
+                hide_index=True,
+                column_config={
+                    "Score Opp.": st.column_config.ProgressColumn(format="%d/100", min_value=0, max_value=100),
+                    "Prix": st.column_config.NumberColumn(format=f"{market.currency} %.2f"),
+                    "Var. 1J (%)": st.column_config.NumberColumn(format="%.2f %%"),
+                    "Var. 5J (%)": st.column_config.NumberColumn(format="%.2f %%"),
+                    "Ratio Vol.": st.column_config.NumberColumn(format="%.2f x"),
+                    "% vs Bas (période)": st.column_config.NumberColumn(format="%.1f %%"),
+                    "Lien": st.column_config.LinkColumn("Fiche", display_text="Voir"),
+                },
+            )
 
+        st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
             st.download_button(
-                "⬇️ Exporter en CSV",
+                "Exporter en CSV",
                 data=display_df.drop(columns=["Lien"]).to_csv(index=False).encode("utf-8"),
                 file_name=f"opportunites_{market.key}_{dt.date.today()}.csv",
                 mime="text/csv",
@@ -670,7 +765,7 @@ with tab_table:
                 with pd.ExcelWriter(buf, engine="openpyxl") as writer:
                     display_df.drop(columns=["Lien"]).to_excel(writer, index=False, sheet_name="Opportunités")
                 st.download_button(
-                    "⬇️ Exporter en Excel",
+                    "Exporter en Excel",
                     data=buf.getvalue(),
                     file_name=f"opportunites_{market.key}_{dt.date.today()}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -692,14 +787,21 @@ with tab_heat:
             color="Var. 1J (%)", color_continuous_scale=["#F0466E", "#232C42", "#22C55E"],
             color_continuous_midpoint=0, hover_data={"Score Opp.": True, "RSI (14)": True, "_weight": False},
         )
-        fig.update_traces(texttemplate="<b>%{label}</b><br>%{color:+.2f}%", textposition="middle center")
+        fig.update_traces(texttemplate="<b>%{label}</b><br>%{color:+.2f}%", textposition="middle center",
+                           textfont_size=13, marker_line_color="#0A0E1A", marker_line_width=2)
         fig.update_layout(
-            height=560, margin=dict(l=4, r=4, t=30, b=4),
+            height=620, margin=dict(l=6, r=6, t=34, b=6),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             font={"color": "#E7ECF5"},
         )
-        st.plotly_chart(fig, width="stretch", key="treemap")
-        st.caption("Taille = poids égal par titre · Couleur = variation du jour (rouge = baisse, vert = hausse).")
+        with st.container(border=True):
+            st.markdown('<div class="panel-title">Cartographie du marché</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="panel-sub">Taille = poids égal par titre. Couleur = variation du jour '
+                '(rouge = baisse, vert = hausse).</div>',
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(fig, width="stretch", key="treemap")
 
 # ---- Onglet Analyse graphique ------------------------------------------
 with tab_chart:
@@ -713,9 +815,8 @@ with tab_chart:
         ind = compute_indicators(stock_data)
 
         fig = make_subplots(
-            rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.04,
+            rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03,
             row_heights=[0.55, 0.2, 0.25],
-            subplot_titles=(f"{selected_ticker} — Prix & Bandes de Bollinger", "Volume", "RSI (14)"),
         )
         fig.add_trace(go.Candlestick(
             x=stock_data.index, open=stock_data["Open"], high=stock_data["High"],
@@ -732,7 +833,7 @@ with tab_chart:
 
         vol_colors = np.where(stock_data["Close"] >= stock_data["Open"], "#22C55E", "#F0466E")
         fig.add_trace(go.Bar(x=stock_data.index, y=stock_data["Volume"], name="Volume",
-                              marker_color=vol_colors), row=2, col=1)
+                              marker_color=vol_colors, showlegend=False), row=2, col=1)
 
         fig.add_trace(go.Scatter(x=stock_data.index, y=ind["rsi"], name="RSI (14)",
                                   line=dict(color="#6C8EFF", width=1.5)), row=3, col=1)
@@ -740,59 +841,78 @@ with tab_chart:
         fig.add_hline(y=70, line_dash="dash", line_color="#F0466E", row=3, col=1)
 
         fig.update_layout(
-            height=650, xaxis_rangeslider_visible=False, showlegend=True,
+            height=720, xaxis_rangeslider_visible=False, showlegend=True,
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font={"color": "#E7ECF5"}, margin=dict(l=10, r=10, t=40, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+            font={"color": "#E7ECF5"}, margin=dict(l=10, r=10, t=44, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.01, x=0),
+            hovermode="x unified",
         )
         fig.update_xaxes(gridcolor="#232C42")
         fig.update_yaxes(gridcolor="#232C42")
-        st.plotly_chart(fig, width="stretch", key="main_chart")
+        fig.update_yaxes(title_text=f"Prix ({market.currency})", row=1, col=1)
+        fig.update_yaxes(title_text="Volume", row=2, col=1)
+        fig.update_yaxes(title_text="RSI (14)", range=[0, 100], row=3, col=1)
 
+        with st.container(border=True):
+            st.markdown(
+                f'<div class="panel-title">{selected_ticker} : prix, volume et RSI</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                '<div class="panel-sub">Bandes de Bollinger (20j, 2σ) et SMA 20 en superposition du prix, '
+                'seuils de survente/surachat à 30 et 70 sur le RSI.</div>',
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(fig, width="stretch", key="main_chart")
+
+        st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Prix", f"{market.currency}{stock_row['Prix']:.2f}", f"{stock_row['Var. 1J (%)']:+.2f}%")
         m2.metric("RSI (14)", stock_row["RSI (14)"])
-        m3.metric("Ratio Volume", f"{stock_row['Ratio Vol.']}x" if stock_row["Ratio Vol."] else "—")
+        m3.metric("Ratio Volume", f"{stock_row['Ratio Vol.']}x" if stock_row["Ratio Vol."] else "N/A")
         m4.metric("Score Opportunité", f"{stock_row['Score Opp.']}/100")
 
 # ---- Onglet Méthodologie -------------------------------------------------
 with tab_about:
-    st.markdown("#### Comment le score d'opportunité (0-100) est calculé")
-    st.markdown(
-        """
-        | Signal | Condition | Points |
-        |---|---|---|
-        | RSI (14) | < 30 (survente forte) | +30 |
-        | RSI (14) | entre 30 et 40 (survente modérée) | +15 |
-        | Bandes de Bollinger | prix ≤ bande basse (20j, 2σ) | +20 |
-        | Volume | ratio vs moyenne 20j > 1.5x | +20 |
-        | Volume | ratio vs moyenne 20j entre 1.2x et 1.5x | +10 |
-        | MACD | croisement haussier naissant de l'histogramme | +15 |
-        | Range période | prix à ≤ 10% du plus bas sur 1 an | +15 |
-        | Range période | prix à ≤ 20% du plus bas sur 1 an | +8 |
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Comment le score d\'opportunité est calculé</div>', unsafe_allow_html=True)
+        st.markdown(
+            """
+            | Signal | Condition | Points |
+            |---|---|---|
+            | RSI (14) | < 30 (survente forte) | +30 |
+            | RSI (14) | entre 30 et 40 (survente modérée) | +15 |
+            | Bandes de Bollinger | prix ≤ bande basse (20j, 2σ) | +20 |
+            | Volume | ratio vs moyenne 20j > 1.5x | +20 |
+            | Volume | ratio vs moyenne 20j entre 1.2x et 1.5x | +10 |
+            | MACD | croisement haussier naissant de l'histogramme | +15 |
+            | Range période | prix à ≤ 10% du plus bas sur 1 an | +15 |
+            | Range période | prix à ≤ 20% du plus bas sur 1 an | +8 |
+            """
+        )
+        st.caption(
+            "Le score est plafonné à 100. Il combine des signaux de survente, de retournement "
+            "et d'anomalie de volume : il ne constitue en aucun cas une garantie de rebond futur."
+        )
 
-        Le score est plafonné à 100. Il combine des signaux de **survente**, de **retournement**
-        et d'**anomalie de volume** — il ne constitue en aucun cas une garantie de rebond futur.
-        """
-    )
-    st.markdown("#### Marchés disponibles")
-    for m in MARKETS.values():
-        tag = " · liste maison, non-officielle" if m.is_curated else " · composition officielle (Wikipedia, temps réel)"
-        st.markdown(f"- **{m.label}**{tag}")
-
-    st.markdown(
-        """
-        <p class="footnote">
-        Les données proviennent de Yahoo Finance (yfinance) et Wikipedia. Elles peuvent être retardées,
-        incomplètes ou erronées. Cet outil est fourni à titre informatif et pédagogique uniquement —
-        il ne constitue ni un conseil en investissement, ni une recommandation d'achat ou de vente.
-        Faites toujours vos propres recherches (DYOR) et consultez un professionnel agréé avant toute décision.
-        </p>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Marchés disponibles</div>', unsafe_allow_html=True)
+        for m in MARKETS.values():
+            tag = ", liste maison, non-officielle" if m.is_curated else ", composition officielle (Wikipedia, temps réel)"
+            st.markdown(f"- **{m.label}**{tag}")
 
 st.markdown(
-    '<p class="footnote" style="margin-top:24px;">⚠️ Outil pédagogique — ne constitue pas un conseil en investissement.</p>',
+    """
+    <div class="disclaimer">
+    Les résultats fournis par cette application reposent sur des indicateurs techniques
+    (RSI, Bandes de Bollinger, MACD, ratio de volume) et sont présentés à titre purement informatif
+    et pédagogique. Ils ne constituent en aucun cas un conseil en investissement, une recommandation
+    d'achat ou de vente, ni une garantie de résultat. Les marchés actions et cryptomonnaies comportent
+    des risques significatifs, y compris la perte totale du capital investi. Les calculs peuvent
+    contenir des approximations ou retards inhérents aux données (Yahoo Finance, Wikipedia).
+    Consultez un professionnel agréé avant toute décision d'investissement.
+    </div>
+    """,
     unsafe_allow_html=True,
 )
