@@ -19,6 +19,9 @@ Architecture :
 """
 
 import io
+import math
+import re
+import unicodedata
 import datetime as dt
 from dataclasses import dataclass
 from typing import Callable, Optional
@@ -30,14 +33,39 @@ import plotly.express as px
 import requests
 import streamlit as st
 import yfinance as yf
+from PIL import Image, ImageDraw
 from plotly.subplots import make_subplots
 
 # ══════════════════════════════════════════════════════════════════════════
 # 1. CONFIGURATION DE PAGE & STYLE
 # ══════════════════════════════════════════════════════════════════════════
+
+
+def _build_favicon() -> Image.Image:
+    """Construit l'icône d'onglet du navigateur sous forme d'image bitmap.
+
+    Un simple caractère Unicode ('▣') passé à page_icon dépend du support
+    emoji/police du navigateur et ne s'affiche pas de façon fiable partout :
+    on dessine donc l'icône nous-mêmes, ce qui garantit un rendu identique
+    dans tous les navigateurs. Cela n'a aucun lien avec le bandeau des
+    mouvements du marché affiché dans la page (le "ticker tape").
+    """
+    size = 64
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    margin = 4
+    draw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=12,
+                            outline=(34, 197, 94, 255), width=7)
+    inner = size * 0.30
+    cx = cy = size / 2
+    draw.rectangle([cx - inner / 2, cy - inner / 2, cx + inner / 2, cy + inner / 2],
+                    fill=(34, 197, 94, 255))
+    return img
+
+
 st.set_page_config(
     page_title="Pro Screener, Multi-Marches",
-    page_icon="▣",
+    page_icon=_build_favicon(),
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -100,6 +128,13 @@ def inject_style() -> None:
             display:inline-block;
         }
 
+        /* ---------- Titres de la barre latérale ---------- */
+        .sidebar-title{ font-family:'Space Grotesk',sans-serif; font-size:1.15rem; font-weight:700;
+                          margin:4px 0 10px 0;
+                          background:linear-gradient(90deg,#F0466E 0%,#FF6A45 45%,#F5A623 100%);
+                          -webkit-background-clip:text; background-clip:text; color:transparent !important;
+                          display:inline-block; }
+
         /* ---------- Disclaimer centré et discret ---------- */
         .disclaimer{ max-width:680px; margin:40px auto 12px auto; text-align:center;
                       color:var(--text-lo); font-size:.74rem; line-height:1.6; opacity:.75; }
@@ -118,11 +153,19 @@ def inject_style() -> None:
         .opp-price{ font-family:'IBM Plex Mono',monospace; font-size:1.05rem; color:var(--text-hi); }
 
         /* ---------- Panneaux (graphiques / tableaux) ---------- */
-        .panel-title{ font-family:'Space Grotesk',sans-serif; font-size:1.05rem; font-weight:600;
-                        color:var(--text-hi); margin:0 0 3px 0; padding-left:11px;
-                        border-left:3px solid var(--emerald); }
+        .panel-title{ font-family:'Space Grotesk',sans-serif; font-size:1.05rem; font-weight:700;
+                        margin:0 0 3px 0; padding-left:11px; border-left:3px solid var(--emerald);
+                        background:linear-gradient(90deg,#F0466E 0%,#FF6A45 45%,#F5A623 100%);
+                        -webkit-background-clip:text; background-clip:text; color:transparent !important;
+                        display:inline-block; }
         .panel-sub{ color:var(--text-lo); font-size:.8rem; margin:0 0 16px 14px; }
         [data-testid="stVerticalBlockBorderWrapper"]{ border-radius:16px !important; }
+
+        /* ---------- Jauge de score (SVG, centrage garanti à toute taille) ---------- */
+        .gauge-wrap{ width:100%; display:flex; justify-content:center; align-items:center; margin-top:6px; }
+        .gauge-svg{ width:100%; max-width:210px; height:auto; display:block; }
+        .gauge-value{ font-family:'IBM Plex Mono',monospace; font-size:34px; font-weight:600; }
+        .gauge-suffix{ font-family:'IBM Plex Mono',monospace; font-size:13px; fill:var(--text-lo); }
 
         .badge{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600;
                  font-family:'IBM Plex Mono',monospace; margin-right:6px; margin-top:6px; }
@@ -430,9 +473,12 @@ def compute_score(rsi, price, boll_low, vol_ratio, macd_hist_prev, macd_hist_las
 # ══════════════════════════════════════════════════════════════════════════
 
 def _extract_frame(data: pd.DataFrame, symbol: str, n_tickers: int) -> pd.DataFrame:
-    """yfinance ne renvoie pas toujours un MultiIndex quand un seul ticker
-    est demandé, on gère les deux cas."""
-    if n_tickers > 1 and isinstance(data.columns, pd.MultiIndex):
+    """yfinance (avec group_by='ticker') peut renvoyer un MultiIndex même
+    pour un seul ticker : on se base donc sur la structure réelle des
+    colonnes plutôt que sur le nombre de tickers demandés."""
+    if isinstance(data.columns, pd.MultiIndex):
+        if symbol not in data.columns.get_level_values(0):
+            return pd.DataFrame()
         return data[symbol].dropna()
     return data.dropna()
 
@@ -498,9 +544,230 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# 4B. CARTES D'OPPORTUNITE & JAUGE DE SCORE (SVG)
+# ══════════════════════════════════════════════════════════════════════════
+
+def render_gauge_svg(score: int) -> str:
+    """Jauge de score en demi-cercle, en SVG pur plutôt qu'en Plotly.
+
+    Le SVG est dimensionné en pourcentage (width="100%") avec un viewBox
+    fixe : le texte reste donc parfaitement centré quelle que soit la
+    largeur réelle du conteneur (1, 2 ou 3 cartes affichées, mobile ou
+    grand écran), ce qu'un graphique Plotly redimensionné ne garantit pas.
+    """
+    radius = 80
+    circumference = math.pi * radius
+    pct = max(0, min(100, score)) / 100
+    offset = circumference * (1 - pct)
+    if score >= 70:
+        color = "#22C55E"
+    elif score >= 40:
+        color = "#F5A623"
+    else:
+        color = "#F0466E"
+    return f"""
+    <div class="gauge-wrap">
+      <svg viewBox="0 0 200 118" class="gauge-svg" role="img" aria-label="Score {score} sur 100">
+        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1C2437"
+              stroke-width="16" stroke-linecap="round"/>
+        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="{color}" stroke-width="16"
+              stroke-linecap="round" stroke-dasharray="{circumference:.2f}"
+              stroke-dashoffset="{offset:.2f}"/>
+        <text x="100" y="90" text-anchor="middle" class="gauge-value" style="fill:#E7ECF5">{score}</text>
+        <text x="100" y="110" text-anchor="middle" class="gauge-suffix">/ 100</text>
+      </svg>
+    </div>
+    """
+
+
+def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> None:
+    """Affiche le contenu d'une carte d'opportunité (texte + jauge). À
+    appeler à l'intérieur d'un `st.container(border=True)`."""
+    var_cls = "badge-buy" if row["Var. 1J (%)"] >= 0 else "badge-down"
+    badges = f'<span class="badge {var_cls}">Var 1J {row["Var. 1J (%)"]:+.2f}%</span>'
+    if row["Sous Bollinger"]:
+        badges += '<span class="badge badge-warn">Sous Bollinger</span>'
+    if row["Ratio Vol."] and row["Ratio Vol."] > 1.2:
+        badges += f'<span class="badge badge-neutral">Vol. {row["Ratio Vol."]:.1f}x</span>'
+    if row["MACD haussier"]:
+        badges += '<span class="badge badge-buy">MACD haussier</span>'
+
+    st.markdown(
+        f"""
+        <div class="opp-card">
+          <div class="opp-rank">{rank_label}</div>
+          <div class="opp-ticker">{row['Ticker']}</div>
+          <div class="opp-name">{row['Nom']}</div>
+          <div class="opp-price">{currency}{row['Prix']:.2f}</div>
+          <div>{badges}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(render_gauge_svg(int(row["Score Opp."])), unsafe_allow_html=True)
+
+
+def infer_currency(ticker: str) -> str:
+    t = ticker.upper()
+    if t.endswith(".PA") or t.endswith(".DE"):
+        return "€"
+    if t.endswith(".L"):
+        return "£"
+    if t.endswith(".HK"):
+        return "HK$"
+    if t.endswith(".T"):
+        return "¥"
+    if t.endswith(".KS") or t.endswith(".KQ"):
+        return "₩"
+    if t.endswith(".TW"):
+        return "NT$"
+    return "$"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 4C. RECHERCHE LIBRE, TOUS MARCHÉS (résolution nom -> ticker)
+# ══════════════════════════════════════════════════════════════════════════
+
+def _norm(s: str) -> str:
+    """Normalise une chaîne pour la comparaison : minuscules, sans accents,
+    sans ponctuation ni espaces."""
+    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def _build_aliases() -> dict:
+    """Table de correspondance nom d'entreprise -> (ticker, nom affiché).
+
+    Volontairement limitée aux actions ordinaires (aucun produit dérivé,
+    ETF à levier, warrant ou option) sur des sociétés dont le ticker
+    principal est bien établi, afin de limiter le risque d'erreur. Elle est
+    complétée par les listes déjà curées de l'application (Tech & IA,
+    cryptomonnaies, Kospi, Asie tech).
+    """
+    raw = {
+        # Méga-capitalisations US
+        "apple": ("AAPL", "Apple"), "microsoft": ("MSFT", "Microsoft"),
+        "google": ("GOOGL", "Alphabet"), "alphabet": ("GOOGL", "Alphabet"),
+        "amazon": ("AMZN", "Amazon"), "nvidia": ("NVDA", "Nvidia"),
+        "meta": ("META", "Meta Platforms"), "facebook": ("META", "Meta Platforms"),
+        "tesla": ("TSLA", "Tesla"), "amd": ("AMD", "AMD"),
+        "broadcom": ("AVGO", "Broadcom"), "oracle": ("ORCL", "Oracle"),
+        "salesforce": ("CRM", "Salesforce"), "adobe": ("ADBE", "Adobe"),
+        "netflix": ("NFLX", "Netflix"), "palantir": ("PLTR", "Palantir"),
+        "intel": ("INTC", "Intel"), "ibm": ("IBM", "IBM"),
+        "qualcomm": ("QCOM", "Qualcomm"), "servicenow": ("NOW", "ServiceNow"),
+        "micron": ("MU", "Micron"), "supermicro": ("SMCI", "Super Micro Computer"),
+        # CAC 40
+        "lvmh": ("MC.PA", "LVMH"), "loreal": ("OR.PA", "L'Oréal"),
+        "totalenergies": ("TTE", "TotalEnergies"), "total": ("TTE", "TotalEnergies"),
+        "sanofi": ("SAN.PA", "Sanofi"), "bnpparibas": ("BNP.PA", "BNP Paribas"),
+        "axa": ("CS.PA", "AXA"), "airliquide": ("AI.PA", "Air Liquide"),
+        "airbus": ("AIR.PA", "Airbus"), "danone": ("BN.PA", "Danone"),
+        "renault": ("RNO.PA", "Renault"), "carrefour": ("CA.PA", "Carrefour"),
+        "vinci": ("DG.PA", "Vinci"), "kering": ("KER.PA", "Kering"),
+        "schneiderelectric": ("SU.PA", "Schneider Electric"),
+        "saintgobain": ("SGO.PA", "Saint-Gobain"),
+        "essilorluxottica": ("EL.PA", "EssilorLuxottica"), "hermes": ("RMS.PA", "Hermès"),
+        "societegenerale": ("GLE.PA", "Société Générale"),
+        "creditagricole": ("ACA.PA", "Crédit Agricole"), "bouygues": ("EN.PA", "Bouygues"),
+        "michelin": ("ML.PA", "Michelin"), "thales": ("HO.PA", "Thales"),
+        "safran": ("SAF.PA", "Safran"), "publicis": ("PUB.PA", "Publicis"),
+        "legrand": ("LR.PA", "Legrand"), "capgemini": ("CAP.PA", "Capgemini"),
+        "dassaultsystemes": ("DSY.PA", "Dassault Systèmes"),
+        "pernodricard": ("RI.PA", "Pernod Ricard"), "veolia": ("VIE.PA", "Veolia"),
+        "engie": ("ENGI.PA", "Engie"), "orange": ("ORA.PA", "Orange"),
+        "stmicroelectronics": ("STM", "STMicroelectronics"),
+        # DAX 40
+        "sap": ("SAP", "SAP"), "siemens": ("SIE.DE", "Siemens"),
+        "volkswagen": ("VOW3.DE", "Volkswagen"), "bmw": ("BMW.DE", "BMW"),
+        "mercedesbenz": ("MBG.DE", "Mercedes-Benz Group"), "allianz": ("ALV.DE", "Allianz"),
+        "adidas": ("ADS.DE", "Adidas"), "deutschebank": ("DBK.DE", "Deutsche Bank"),
+        "basf": ("BAS.DE", "BASF"), "bayer": ("BAYN.DE", "Bayer"),
+        "infineon": ("IFX.DE", "Infineon"),
+        # Grandes ADR internationales bien établies
+        "shell": ("SHEL", "Shell"), "hsbc": ("HSBC", "HSBC"),
+        "astrazeneca": ("AZN", "AstraZeneca"), "bp": ("BP", "BP"),
+        "unilever": ("UL", "Unilever"), "gsk": ("GSK", "GSK"),
+    }
+    aliases = dict(raw)
+    for loader in (load_tech_trending, load_crypto_top, load_kospi_leaders, load_asia_tech_leaders):
+        try:
+            for _, r in loader().iterrows():
+                key = _norm(r["Nom"])
+                if key and key not in aliases:
+                    aliases[key] = (r["Symbol"], r["Nom"])
+        except Exception:
+            continue
+    return {k: v for k, v in aliases.items() if k}
+
+
+ALIASES = _build_aliases()
+
+
+def resolve_query_to_ticker(query: str, universe_df: pd.DataFrame, results_df: pd.DataFrame):
+    """Résout une saisie libre (ticker ou nom d'entreprise) en un ticker
+    Yahoo Finance, indépendamment du marché actuellement sélectionné.
+
+    Ordre de résolution :
+      1. Table d'alias curée (cross-marché) ;
+      2. Correspondance exacte ou partielle dans l'univers déjà chargé
+         (marché actuellement sélectionné) ;
+      3. Correspondance partielle dans la table d'alias ;
+      4. Si la saisie ressemble déjà à un ticker valide (lettres/chiffres/
+         '.', '-', '^'), on la tente telle quelle.
+
+    Retourne (ticker, nom_affiché) ou (None, None) si rien n'est résolu.
+    """
+    q = query.strip()
+    if not q:
+        return None, None
+    nq = _norm(q)
+
+    if nq in ALIASES:
+        return ALIASES[nq]
+
+    for df, ticker_col in ((results_df, "Ticker"), (universe_df, "Symbol")):
+        if df is None or len(df) == 0 or "Nom" not in df.columns or ticker_col not in df.columns:
+            continue
+        norm_names = df["Nom"].astype(str).map(_norm)
+        exact = df[norm_names == nq]
+        if len(exact):
+            r = exact.iloc[0]
+            return r[ticker_col], r["Nom"]
+        ticker_exact = df[df[ticker_col].astype(str).str.lower() == q.lower()]
+        if len(ticker_exact):
+            r = ticker_exact.iloc[0]
+            return r[ticker_col], r["Nom"]
+        contains = df[norm_names.str.contains(nq, na=False)] if nq else df.iloc[0:0]
+        if len(contains):
+            r = contains.iloc[0]
+            return r[ticker_col], r["Nom"]
+
+    for key, (ticker, name) in ALIASES.items():
+        if nq and (nq in key or key in nq):
+            return ticker, name
+
+    if re.fullmatch(r"[\^A-Za-z0-9.\-]{1,12}", q):
+        return q.upper(), q.upper()
+
+    return None, None
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def fetch_single_ticker(ticker: str, display_name: str):
+    """Récupère et analyse un seul ticker, indépendamment du marché
+    sélectionné dans la barre latérale. Réutilise le même pipeline
+    d'indicateurs/scoring que l'analyse principale."""
+    df_result, err = fetch_and_analyze("search", [ticker], {ticker: display_name}, {ticker: "Recherche"})
+    if err or df_result.empty:
+        return None
+    return df_result.iloc[0]
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # 5. SIDEBAR : SELECTION DU MARCHE ET FILTRES
 # ══════════════════════════════════════════════════════════════════════════
-st.sidebar.markdown("## Marché et univers")
+st.sidebar.markdown('<div class="sidebar-title">Marché et univers</div>', unsafe_allow_html=True)
 market_key = st.sidebar.selectbox(
     "Marché à analyser", list(MARKETS.keys()), format_func=lambda k: MARKETS[k].label,
 )
@@ -528,7 +795,7 @@ else:
 st.sidebar.caption(f"{len(universe_df)} titres dans l'univers sélectionné")
 st.sidebar.markdown("---")
 
-st.sidebar.markdown("## Profil et filtres")
+st.sidebar.markdown('<div class="sidebar-title">Profil et filtres</div>', unsafe_allow_html=True)
 
 PRESETS = {
     "Conservateur": {"score": 60, "rsi": 30},
@@ -557,7 +824,8 @@ with st.sidebar.expander("Critères de sélection", expanded=True):
     min_score = st.slider("Score Opportunité Min.", 0, 100, step=5, key="min_score")
     rsi_max = st.slider("RSI Max (zone de survente)", 10, 50, key="rsi_max")
     volume_filter = st.checkbox("Volume ≥ moyenne 20 jours (≥ 1.0x)", value=True)
-    search_query = st.text_input("Rechercher un ticker ou un nom", "")
+    search_query = st.text_input("Filtrer le tableau affiché", "")
+    st.caption("Pour chercher un titre hors du marché sélectionné, utilisez la recherche libre en haut de page.")
 
 with st.sidebar.expander("Affichage"):
     max_rows = st.select_slider("Résultats affichés (max.)", options=[10, 20, 50, 100, "Tous"], value=50)
@@ -666,49 +934,49 @@ if len(filtered) > 0:
     cols = st.columns(len(top3))
     for i, (col, (_, row)) in enumerate(zip(cols, top3.iterrows())):
         with col, st.container(border=True):
-            var_cls = "badge-buy" if row["Var. 1J (%)"] >= 0 else "badge-down"
-            badges = f'<span class="badge {var_cls}">Var 1J {row["Var. 1J (%)"]:+.2f}%</span>'
-            if row["Sous Bollinger"]:
-                badges += '<span class="badge badge-warn">Sous Bollinger</span>'
-            if row["Ratio Vol."] and row["Ratio Vol."] > 1.2:
-                badges += f'<span class="badge badge-neutral">Vol. {row["Ratio Vol."]:.1f}x</span>'
-            if row["MACD haussier"]:
-                badges += '<span class="badge badge-buy">MACD haussier</span>'
+            render_opportunity_card(row, market.currency, f"Opportunité n. {i + 1}")
 
-            st.markdown(
-                f"""
-                <div class="opp-card">
-                  <div class="opp-rank">Opportunité n. {i+1}</div>
-                  <div class="opp-ticker">{row['Ticker']}</div>
-                  <div class="opp-name">{row['Nom']}</div>
-                  <div class="opp-price">{market.currency}{row['Prix']:.2f}</div>
-                  <div>{badges}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
+st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════
+# 11B. RECHERCHE LIBRE, TOUS MARCHÉS
+# ══════════════════════════════════════════════════════════════════════════
+st.markdown('#### <span class="gradient-text">Rechercher un titre, tous marchés</span>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="panel-sub">Ticker (ex: MC.PA, ^FCHI, AAPL) ou nom d\'entreprise (ex: Orange, Sanofi, Apple). '
+    'Indépendant du marché sélectionné ci-contre.</div>',
+    unsafe_allow_html=True,
+)
+col_search, col_btn = st.columns([4, 1])
+with col_search:
+    free_query = st.text_input(
+        "Ticker ou nom d'entreprise", "", key="free_search",
+        label_visibility="collapsed", placeholder="Ticker ou nom d'entreprise, ex: Orange, Sanofi, MC.PA, ^FCHI",
+    )
+with col_btn:
+    search_clicked = st.button("Rechercher", width="stretch")
+
+if search_clicked and free_query.strip():
+    resolved_ticker, resolved_name = resolve_query_to_ticker(free_query, universe_df, results_df)
+    if resolved_ticker is None:
+        st.warning(
+            f"Aucun titre trouvé pour « {free_query} ». Essayez le ticker exact au format Yahoo Finance "
+            "(ex: MC.PA, ^FCHI) ou le nom d'une entreprise connue (ex: Sanofi, Orange, Apple)."
+        )
+    else:
+        with st.spinner(f"Recherche de {resolved_ticker}..."):
+            search_row = fetch_single_ticker(resolved_ticker, resolved_name or resolved_ticker)
+        if search_row is None:
+            st.warning(
+                f"Impossible de récupérer les données pour {resolved_ticker}. "
+                "Le ticker est peut-être invalide, délisté, ou l'accès réseau est temporairement limité."
             )
-            gauge = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=row["Score Opp."],
-                number={"suffix": "/100", "font": {"size": 22, "color": "#E7ECF5"}},
-                gauge={
-                    "axis": {"range": [0, 100], "tickwidth": 0, "tickcolor": "rgba(0,0,0,0)"},
-                    "bar": {"color": "#22C55E" if row["Score Opp."] >= 60 else "#F5A623"},
-                    "bgcolor": "rgba(0,0,0,0)",
-                    "borderwidth": 0,
-                    "steps": [
-                        {"range": [0, 40], "color": "rgba(132,146,172,.15)"},
-                        {"range": [40, 70], "color": "rgba(245,166,35,.15)"},
-                        {"range": [70, 100], "color": "rgba(34,197,94,.15)"},
-                    ],
-                },
-            ))
-            gauge.update_layout(height=130, margin=dict(l=16, r=16, t=8, b=4),
-                                 paper_bgcolor="rgba(0,0,0,0)", font={"color": "#E7ECF5"})
-            st.plotly_chart(gauge, width="stretch", config={"displayModeBar": False},
-                             key=f"gauge_{row['Ticker']}")
+        else:
+            search_col = st.columns([1, 1, 1])[0]
+            with search_col, st.container(border=True):
+                render_opportunity_card(search_row, infer_currency(resolved_ticker), "Résultat de recherche")
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════
 # 12. ONGLETS PRINCIPAUX
