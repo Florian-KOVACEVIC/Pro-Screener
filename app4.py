@@ -80,21 +80,23 @@ def _build_favicon() -> Image.Image:
 
 def render_hero_icon_svg(size: int = 40) -> str:
     """Icône affichée à côté du titre principal, avec le même dégradé que
-    le favicon et que le texte en dégradé (.gradient-text)."""
-    return f"""
-    <svg class="hero-icon" width="{size}" height="{size}" viewBox="0 0 64 64"
-         xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <defs>
-        <linearGradient id="heroIconGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#F0466E"/>
-          <stop offset="45%" stop-color="#FF6A45"/>
-          <stop offset="100%" stop-color="#F5A623"/>
-        </linearGradient>
-      </defs>
-      <rect x="5" y="5" width="54" height="54" rx="12" fill="none" stroke="url(#heroIconGrad)" stroke-width="7"/>
-      <rect x="24" y="24" width="16" height="16" fill="url(#heroIconGrad)"/>
-    </svg>
+    le favicon et que le texte en dégradé (.gradient-text).
+
+    Rendue sur une seule ligne (pas de retour à la ligne ni de ligne vide) :
+    lorsque cette chaîne est insérée au milieu d'un autre bloc HTML passé à
+    st.markdown, une ligne vide ferait croire au moteur Markdown que le bloc
+    HTML brut est terminé, et le reste (le titre) serait alors affiché comme
+    du texte échappé au lieu d'être interprété comme du HTML.
     """
+    return (
+        f'<svg class="hero-icon" width="{size}" height="{size}" viewBox="0 0 64 64" '
+        'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        '<defs><linearGradient id="heroIconGrad" x1="0%" y1="0%" x2="100%" y2="0%">'
+        '<stop offset="0%" stop-color="#F0466E"/><stop offset="45%" stop-color="#FF6A45"/>'
+        '<stop offset="100%" stop-color="#F5A623"/></linearGradient></defs>'
+        '<rect x="5" y="5" width="54" height="54" rx="12" fill="none" stroke="url(#heroIconGrad)" stroke-width="7"/>'
+        '<rect x="24" y="24" width="16" height="16" fill="url(#heroIconGrad)"/></svg>'
+    )
 
 
 st.set_page_config(
@@ -122,9 +124,19 @@ def inject_style() -> None:
             --indigo:#6C8EFF;
         }
 
-        html, body, [class*="css"]{ font-family:'Inter',sans-serif; }
-        .stApp{ background:radial-gradient(ellipse at top, #0D1220 0%, var(--bg-void) 55%); }
-        [data-testid="stHeader"]{ background:transparent; }
+        html, body, [class*="css"]{ font-family:'Inter',sans-serif; color-scheme:dark; }
+        html, body,
+        [data-testid="stAppViewContainer"], [data-testid="stApp"], [data-testid="stMain"],
+        [data-testid="stHeader"], [data-testid="stBottomBlockContainer"], .main{
+            background-color:var(--bg-void) !important; color:var(--text-hi) !important;
+        }
+        .stApp{ background:radial-gradient(ellipse at top, #0D1220 0%, var(--bg-void) 55%) !important; }
+        /* Menus/popovers BaseWeb (selectbox, select multiple) sont montés hors de l'arbre DOM normal :
+           on les cible explicitement pour éviter tout résidu de thème clair. */
+        [data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"], ul[data-testid="stSelectboxVirtualDropdown"]{
+            background-color:var(--bg-card) !important; border-color:var(--border) !important;
+        }
+        [data-baseweb="menu"] li, [role="option"]{ color:var(--text-hi) !important; }
 
         h1,h2,h3,h4{ font-family:'Space Grotesk',sans-serif !important; color:var(--text-hi) !important; letter-spacing:-.01em; }
         p, span, label, div{ color:var(--text-hi); }
@@ -175,11 +187,19 @@ def inject_style() -> None:
         .disclaimer{ max-width:680px; margin:40px auto 12px auto; text-align:center;
                       color:var(--text-lo); font-size:.74rem; line-height:1.6; opacity:.75; }
 
-        /* ---------- Metrics ---------- */
+        /* ---------- Metrics (onglet graphique) ---------- */
         [data-testid="stMetric"]{ background:var(--bg-card); border:1px solid var(--border); border-radius:14px;
                                     padding:14px 18px; }
         [data-testid="stMetricLabel"]{ color:var(--text-lo) !important; font-size:.8rem !important; }
         [data-testid="stMetricValue"]{ font-family:'IBM Plex Mono',monospace !important; color:var(--text-hi) !important; }
+
+        /* ---------- Grille de KPI (responsive : passe à la ligne si l'écran est étroit) ---------- */
+        .kpi-grid{ display:flex; flex-wrap:wrap; gap:12px; margin:4px 0 8px 0; }
+        .kpi-card{ flex:1 1 170px; min-width:150px; background:var(--bg-card); border:1px solid var(--border);
+                    border-radius:14px; padding:14px 18px; }
+        .kpi-label{ color:var(--text-lo); font-size:.8rem; margin-bottom:6px; white-space:normal; }
+        .kpi-value{ font-family:'IBM Plex Mono',monospace; color:var(--text-hi); font-size:1.35rem; font-weight:700;
+                     white-space:normal; word-break:break-word; line-height:1.2; }
 
         /* ---------- Spotlight cards ---------- */
         .opp-card{ padding:2px 2px 4px 2px; }
@@ -198,9 +218,9 @@ def inject_style() -> None:
         [data-testid="stVerticalBlockBorderWrapper"]{ border-radius:16px !important; }
 
         /* ---------- Jauge de score (SVG, centrage garanti à toute taille) ---------- */
-        .gauge-wrap{ width:100%; display:flex; justify-content:center; align-items:center; margin-top:6px; }
-        .gauge-svg{ width:100%; max-width:210px; height:auto; display:block; }
-        .gauge-value{ font-family:'IBM Plex Mono',monospace; font-size:34px; font-weight:600; }
+        .gauge-wrap{ width:100%; display:flex; justify-content:center; align-items:center; margin-top:8px; }
+        .gauge-svg{ width:100%; max-width:200px; height:auto; display:block; }
+        .gauge-value{ font-family:'IBM Plex Mono',monospace; font-size:36px; font-weight:700; fill:var(--text-hi); }
         .gauge-suffix{ font-family:'IBM Plex Mono',monospace; font-size:13px; fill:var(--text-lo); }
 
         .badge{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600;
@@ -508,9 +528,9 @@ def load_crypto_top() -> pd.DataFrame:
 
 
 MARKETS: dict[str, MarketConfig] = {
-    "sp500": MarketConfig("sp500", "S&P 500 (Etats-Unis)", load_sp500, "", "$", "Secteur GICS"),
-    "nasdaq100": MarketConfig("nasdaq100", "Nasdaq 100 (Etats-Unis)", load_nasdaq100, "", "$", "Secteur GICS"),
-    "dow30": MarketConfig("dow30", "Dow Jones 30 (Etats-Unis)", load_dow30, "", "$", "Industrie"),
+    "sp500": MarketConfig("sp500", "S&P 500 (États-Unis)", load_sp500, "", "$", "Secteur GICS"),
+    "nasdaq100": MarketConfig("nasdaq100", "Nasdaq 100 (États-Unis)", load_nasdaq100, "", "$", "Secteur GICS"),
+    "dow30": MarketConfig("dow30", "Dow Jones 30 (États-Unis)", load_dow30, "", "$", "Industrie"),
     "cac40": MarketConfig(
         "cac40", "CAC 40, grandes capitalisations (France)", load_cac40_leaders, "", "€", "Secteur", is_curated=True,
         note="Sélection maison des principales valeurs du CAC 40, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
@@ -694,6 +714,8 @@ def render_gauge_svg(score: int) -> str:
     fixe : le texte reste donc parfaitement centré quelle que soit la
     largeur réelle du conteneur (1, 2 ou 3 cartes affichées, mobile ou
     grand écran), ce qu'un graphique Plotly redimensionné ne garantit pas.
+    Rendu sur une seule ligne pour éviter tout risque d'interruption du
+    bloc HTML par le moteur Markdown (voir render_hero_icon_svg).
     """
     radius = 80
     circumference = math.pi * radius
@@ -705,19 +727,17 @@ def render_gauge_svg(score: int) -> str:
         color = "#F5A623"
     else:
         color = "#F0466E"
-    return f"""
-    <div class="gauge-wrap">
-      <svg viewBox="0 0 200 118" class="gauge-svg" role="img" aria-label="Score {score} sur 100">
-        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#1C2437"
-              stroke-width="16" stroke-linecap="round"/>
-        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="{color}" stroke-width="16"
-              stroke-linecap="round" stroke-dasharray="{circumference:.2f}"
-              stroke-dashoffset="{offset:.2f}"/>
-        <text x="100" y="90" text-anchor="middle" class="gauge-value" style="fill:#E7ECF5">{score}</text>
-        <text x="100" y="110" text-anchor="middle" class="gauge-suffix">/ 100</text>
-      </svg>
-    </div>
-    """
+    return (
+        '<div class="gauge-wrap">'
+        f'<svg viewBox="0 0 200 114" class="gauge-svg" role="img" aria-label="Score {score} sur 100">'
+        '<path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#2E3A56" '
+        'stroke-width="16" stroke-linecap="round"/>'
+        f'<path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="{color}" stroke-width="16" '
+        f'stroke-linecap="round" stroke-dasharray="{circumference:.2f}" stroke-dashoffset="{offset:.2f}"/>'
+        f'<text x="100" y="84" text-anchor="middle" class="gauge-value">{score}</text>'
+        '<text x="100" y="104" text-anchor="middle" class="gauge-suffix">/ 100</text>'
+        '</svg></div>'
+    )
 
 
 def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> None:
@@ -1051,6 +1071,10 @@ with st.sidebar.expander("Critères de sélection", expanded=True):
     selected_group = st.selectbox(market.group_label, group_options)
     min_score = st.slider("Score Opportunité Min.", 0, 100, step=5, key="min_score")
     rsi_max = st.slider("RSI Max (zone de survente)", 10, 50, key="rsi_max")
+    st.caption(
+        "Score et RSI sont deux filtres indépendants (ET logique) : baisser le score minimum "
+        "n'affiche rien tant que le RSI dépasse ce seuil. Si un marché reste vide, montez ce curseur."
+    )
     volume_filter = st.checkbox("Volume ≥ moyenne 20 jours (≥ 1.0x)", value=False)
     search_query = st.text_input("Filtrer le tableau affiché", "")
     st.caption("Pour chercher un titre hors du marché sélectionné, utilisez la recherche libre en haut de page.")
@@ -1070,7 +1094,7 @@ st.sidebar.caption(f"Dernière analyse : {dt.datetime.now().strftime('%d/%m/%Y %
 # ══════════════════════════════════════════════════════════════════════════
 if len(universe_df) == 0:
     st.markdown(
-        '<div class="hero"><div class="hero-badge">EN ATTENTE</div>'
+        '<div class="hero"><div class="hero-badge">En attente</div>'
         f'<div class="hero-title-row">{render_hero_icon_svg()}'
         "<h1 class=\"gradient-text\">Screener d'Opportunités, Court Terme et Rebond</h1></div>"
         '<p>Sélectionnez un marché ou saisissez des tickers personnalisés dans la barre latérale pour démarrer l\'analyse.</p></div>',
@@ -1133,7 +1157,7 @@ st.markdown(
 st.markdown(
     f"""
     <div class="hero">
-      <div class="hero-badge">MARCHE ACTIF : {market.label}</div>
+      <div class="hero-badge">Marché actif : {market.label}</div>
       <div class="hero-title-row">
         {render_hero_icon_svg()}
         <h1 class="gradient-text">Screener d'Opportunités, Court Terme et Rebond</h1>
@@ -1148,12 +1172,18 @@ st.markdown(
 # ══════════════════════════════════════════════════════════════════════════
 # 10. KPIs
 # ══════════════════════════════════════════════════════════════════════════
-k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("Univers analysé", len(results_df))
-k2.metric("Opportunités détectées", len(filtered))
-k3.metric("RSI moyen (sélection)", f"{filtered['RSI (14)'].mean():.1f}" if len(filtered) else "N/A")
-k4.metric("Variation moy. 1J", f"{filtered['Var. 1J (%)'].mean():+.2f}%" if len(filtered) else "N/A")
-k5.metric("Score moyen", f"{filtered['Score Opp.'].mean():.0f}/100" if len(filtered) else "N/A")
+kpis = [
+    ("Univers analysé", str(len(results_df))),
+    ("Opportunités détectées", str(len(filtered))),
+    ("RSI moyen (sélection)", f"{filtered['RSI (14)'].mean():.1f}" if len(filtered) else "N/A"),
+    ("Variation moy. 1J", f"{filtered['Var. 1J (%)'].mean():+.2f}%" if len(filtered) else "N/A"),
+    ("Score moyen", f"{filtered['Score Opp.'].mean():.0f} / 100" if len(filtered) else "N/A"),
+]
+kpi_html = "".join(
+    f'<div class="kpi-card"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div>'
+    for label, value in kpis
+)
+st.markdown(f'<div class="kpi-grid">{kpi_html}</div>', unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
