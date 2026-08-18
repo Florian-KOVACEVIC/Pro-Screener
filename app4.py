@@ -1,6 +1,6 @@
 """
 ================================================================================
- PRO SCREENER : Opportunites Court Terme et Rebond (Multi-Marches)
+ PRO SCREENER : Opportunités Court Terme et Rebond (Multi-Marchés)
 ================================================================================
 Application Streamlit pour détecter des actions/cryptos en survente présentant
 un volume anormal et des signaux techniques de rebond, sur n'importe quel
@@ -231,15 +231,35 @@ def _col(df: pd.DataFrame, keys: list[str]) -> Optional[str]:
     return None
 
 
+def _clean_cell(series: pd.Series) -> pd.Series:
+    """Nettoie une colonne extraite de Wikipedia : notes de bas de page
+    ('MC[1]', 'MC†'), retours à la ligne parasites, espaces multiples."""
+    s = series.astype(str)
+    s = s.str.replace(r"\[.*?\]", "", regex=True)
+    s = s.str.replace(r"[\n\r\t]+", " ", regex=True)
+    s = s.str.replace(r"\s+", " ", regex=True)
+    return s.str.strip()
+
+
 def _standardize(df: pd.DataFrame, ticker_keys, name_keys, sector_keys, clean_dot=True) -> pd.DataFrame:
     tcol, ncol, scol = _col(df, ticker_keys), _col(df, name_keys), _col(df, sector_keys)
     out = pd.DataFrame()
-    out["Symbol"] = df[tcol].astype(str).str.strip()
+    out["Symbol"] = _clean_cell(df[tcol])
     if clean_dot:
         out["Symbol"] = out["Symbol"].str.replace(".", "-", regex=False)  # ex: BRK.B -> BRK-B
-    out["Nom"] = df[ncol].astype(str).str.strip() if ncol else out["Symbol"]
-    out["Groupe"] = df[scol].astype(str).str.strip() if scol else "N/A"
+    out["Nom"] = _clean_cell(df[ncol]) if ncol else out["Symbol"]
+    out["Groupe"] = _clean_cell(df[scol]) if scol else "N/A"
+    out = out[out["Symbol"].str.len() > 0]
+    out = out[~out["Symbol"].str.lower().isin(["nan", "none"])]
     return out.drop_duplicates(subset="Symbol").reset_index(drop=True)
+
+
+def _ensure_suffix(ticker: str, suffix: str) -> str:
+    """Évite un double suffixe (ex: 'MC.PA' + '.PA' -> 'MC.PA.PA') si la
+    colonne source contenait déjà le suffixe de la place boursière."""
+    if not suffix:
+        return ticker
+    return ticker if ticker.upper().endswith(suffix.upper()) else ticker + suffix
 
 
 # ---- Chargeurs d'indices officiels (scraping Wikipedia en direct) ---------
@@ -267,38 +287,104 @@ def load_dow30() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def load_cac40() -> pd.DataFrame:
-    t = _best_wiki_table("https://en.wikipedia.org/wiki/CAC_40", ["ticker"], ["company"])
-    return _standardize(t, ["ticker"], ["company"], ["sector", "gics"], clean_dot=False)
-
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def load_dax40() -> pd.DataFrame:
-    t = _best_wiki_table("https://en.wikipedia.org/wiki/DAX", ["ticker symbol", "ticker"], ["company"])
-    return _standardize(t, ["ticker symbol", "ticker"], ["company"], ["sector", "industry"], clean_dot=False)
-
-
-@st.cache_data(ttl=86400, show_spinner=False)
 def load_ftse100() -> pd.DataFrame:
-    t = _best_wiki_table("https://en.wikipedia.org/wiki/FTSE_100_Index", ["ticker"], ["company"])
-    return _standardize(t, ["ticker"], ["company"], ["sector", "industry", "ftse industry"], clean_dot=False)
-
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def load_nikkei225() -> pd.DataFrame:
-    t = _best_wiki_table("https://en.wikipedia.org/wiki/Nikkei_225", ["code", "ticker"], ["company", "name"])
-    return _standardize(t, ["code", "ticker"], ["company", "name"], ["sector", "industry"], clean_dot=False)
+    t = _best_wiki_table("https://en.wikipedia.org/wiki/FTSE_100_Index", ["ticker", "epic"], ["company", "name"])
+    return _standardize(t, ["ticker", "epic"], ["company", "name"], ["sector", "industry", "ftse industry"], clean_dot=False)
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_hangseng() -> pd.DataFrame:
-    t = _best_wiki_table("https://en.wikipedia.org/wiki/Hang_Seng_Index", ["ticker", "sehk", "code"], ["constituent", "company", "name"])
-    df = _standardize(t, ["ticker", "sehk", "code"], ["constituent", "company", "name"], ["sector", "industry"], clean_dot=False)
+    t = _best_wiki_table("https://en.wikipedia.org/wiki/Hang_Seng_Index", ["ticker", "sehk", "code", "symbol"], ["constituent", "company", "name"])
+    df = _standardize(t, ["ticker", "sehk", "code", "symbol"], ["constituent", "company", "name"], ["sector", "industry"], clean_dot=False)
     df["Symbol"] = df["Symbol"].str.extract(r"(\d+)")[0].str.zfill(4)
     return df.dropna(subset=["Symbol"]).drop_duplicates(subset="Symbol").reset_index(drop=True)
 
 
 # ---- Listes curées (explicitement non-officielles, usage illustratif) -----
+#
+# CAC 40, DAX 40 et Nikkei 225 sont ici en liste curée plutôt qu'en scraping
+# Wikipedia en direct : ces trois pages se sont montrées peu fiables en
+# pratique (tableaux absents, colonnes ambiguës, tickers mal formés
+# provoquant l'échec du téléchargement des cours). Une liste maison stable
+# et honnêtement annoncée comme non exhaustive est préférable à une source
+# qui échoue une fois sur deux.
+
+
+def load_cac40_leaders() -> pd.DataFrame:
+    data = [
+        ("MC.PA", "LVMH", "Luxe"), ("OR.PA", "L'Oréal", "Consommation"),
+        ("TTE", "TotalEnergies", "Énergie"), ("SAN.PA", "Sanofi", "Santé"),
+        ("BNP.PA", "BNP Paribas", "Finance"), ("CS.PA", "AXA", "Finance"),
+        ("AI.PA", "Air Liquide", "Industrie"), ("AIR.PA", "Airbus", "Aéronautique"),
+        ("BN.PA", "Danone", "Consommation"), ("RNO.PA", "Renault", "Automobile"),
+        ("CA.PA", "Carrefour", "Distribution"), ("DG.PA", "Vinci", "BTP"),
+        ("KER.PA", "Kering", "Luxe"), ("SU.PA", "Schneider Electric", "Industrie"),
+        ("SGO.PA", "Saint-Gobain", "Matériaux"), ("EL.PA", "EssilorLuxottica", "Santé"),
+        ("RMS.PA", "Hermès", "Luxe"), ("GLE.PA", "Société Générale", "Finance"),
+        ("ACA.PA", "Crédit Agricole", "Finance"), ("EN.PA", "Bouygues", "BTP / Télécom"),
+        ("ML.PA", "Michelin", "Industrie"), ("HO.PA", "Thales", "Défense"),
+        ("SAF.PA", "Safran", "Aéronautique"), ("PUB.PA", "Publicis", "Communication"),
+        ("LR.PA", "Legrand", "Industrie"), ("CAP.PA", "Capgemini", "Tech / Conseil"),
+        ("DSY.PA", "Dassault Systèmes", "Tech"), ("RI.PA", "Pernod Ricard", "Consommation"),
+        ("VIE.PA", "Veolia", "Environnement"), ("ENGI.PA", "Engie", "Énergie"),
+        ("ORA.PA", "Orange", "Télécom"), ("STM", "STMicroelectronics", "Semi-conducteurs"),
+    ]
+    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
+
+def load_dax40_leaders() -> pd.DataFrame:
+    data = [
+        ("SAP", "SAP", "Logiciels"), ("SIE.DE", "Siemens", "Industrie"),
+        ("VOW3.DE", "Volkswagen", "Automobile"), ("BMW.DE", "BMW", "Automobile"),
+        ("MBG.DE", "Mercedes-Benz Group", "Automobile"), ("ALV.DE", "Allianz", "Finance"),
+        ("ADS.DE", "Adidas", "Consommation"), ("DBK.DE", "Deutsche Bank", "Finance"),
+        ("BAS.DE", "BASF", "Chimie"), ("BAYN.DE", "Bayer", "Santé / Chimie"),
+        ("IFX.DE", "Infineon", "Semi-conducteurs"), ("DTE.DE", "Deutsche Telekom", "Télécom"),
+        ("MUV2.DE", "Munich Re", "Assurance"), ("RWE.DE", "RWE", "Énergie"),
+        ("EOAN.DE", "E.ON", "Énergie"), ("DHL.DE", "Deutsche Post DHL Group", "Logistique"),
+        ("CON.DE", "Continental", "Automobile"), ("HEN3.DE", "Henkel", "Consommation"),
+        ("FRE.DE", "Fresenius", "Santé"), ("VNA.DE", "Vonovia", "Immobilier"),
+    ]
+    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
+
+def load_nikkei_leaders() -> pd.DataFrame:
+    data = [
+        ("7203.T", "Toyota Motor", "Automobile"), ("6758.T", "Sony Group", "Électronique"),
+        ("9984.T", "SoftBank Group", "Tech / Investissement"), ("6861.T", "Keyence", "Électronique"),
+        ("9983.T", "Fast Retailing (Uniqlo)", "Distribution"), ("8035.T", "Tokyo Electron", "Semi-conducteurs"),
+        ("7974.T", "Nintendo", "Jeux vidéo"), ("8306.T", "Mitsubishi UFJ Financial Group", "Finance"),
+        ("7267.T", "Honda Motor", "Automobile"), ("6501.T", "Hitachi", "Industrie"),
+        ("6752.T", "Panasonic", "Électronique"), ("7751.T", "Canon", "Électronique"),
+        ("8058.T", "Mitsubishi Corporation", "Négoce"), ("8031.T", "Mitsui & Co", "Négoce"),
+        ("4063.T", "Shin-Etsu Chemical", "Chimie"), ("6367.T", "Daikin Industries", "Industrie"),
+        ("9433.T", "KDDI", "Télécom"), ("9432.T", "Nippon Telegraph and Telephone", "Télécom"),
+        ("6098.T", "Recruit Holdings", "Services"), ("6981.T", "Murata Manufacturing", "Électronique"),
+        ("4502.T", "Takeda Pharmaceutical", "Santé"), ("7201.T", "Nissan Motor", "Automobile"),
+    ]
+    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
+
+def load_sx5e_leaders() -> pd.DataFrame:
+    """Grandes valeurs de la zone euro proches de la composition du
+    EURO STOXX 50 (SX5E). Sélection maison, non exhaustive."""
+    data = [
+        ("MC.PA", "LVMH", "Luxe"), ("TTE", "TotalEnergies", "Énergie"),
+        ("SAN.PA", "Sanofi", "Santé"), ("SAP", "SAP", "Logiciels"),
+        ("SIE.DE", "Siemens", "Industrie"), ("ALV.DE", "Allianz", "Finance"),
+        ("ASML", "ASML Holding", "Semi-conducteurs"), ("AIR.PA", "Airbus", "Aéronautique"),
+        ("AI.PA", "Air Liquide", "Industrie"), ("SAN.MC", "Banco Santander", "Finance"),
+        ("IBE.MC", "Iberdrola", "Énergie"), ("ISP.MI", "Intesa Sanpaolo", "Finance"),
+        ("ENEL.MI", "Enel", "Énergie"), ("ENI.MI", "Eni", "Énergie"),
+        ("DTE.DE", "Deutsche Telekom", "Télécom"), ("MUV2.DE", "Munich Re", "Assurance"),
+        ("VOW3.DE", "Volkswagen", "Automobile"), ("BMW.DE", "BMW", "Automobile"),
+        ("DG.PA", "Vinci", "BTP"), ("KER.PA", "Kering", "Luxe"),
+        ("BNP.PA", "BNP Paribas", "Finance"), ("CS.PA", "AXA", "Finance"),
+        ("SU.PA", "Schneider Electric", "Industrie"), ("ADS.DE", "Adidas", "Consommation"),
+        ("BN.PA", "Danone", "Consommation"), ("SAF.PA", "Safran", "Aéronautique"),
+    ]
+    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
 
 def load_kospi_leaders() -> pd.DataFrame:
     """Sélection maison des plus grandes capitalisations cotées au KOSPI.
@@ -384,10 +470,23 @@ MARKETS: dict[str, MarketConfig] = {
     "sp500": MarketConfig("sp500", "S&P 500 (Etats-Unis)", load_sp500, "", "$", "Secteur GICS"),
     "nasdaq100": MarketConfig("nasdaq100", "Nasdaq 100 (Etats-Unis)", load_nasdaq100, "", "$", "Secteur GICS"),
     "dow30": MarketConfig("dow30", "Dow Jones 30 (Etats-Unis)", load_dow30, "", "$", "Industrie"),
-    "cac40": MarketConfig("cac40", "CAC 40 (France)", load_cac40, ".PA", "€", "Secteur"),
-    "dax40": MarketConfig("dax40", "DAX 40 (Allemagne)", load_dax40, ".DE", "€", "Secteur"),
+    "cac40": MarketConfig(
+        "cac40", "CAC 40, grandes capitalisations (France)", load_cac40_leaders, "", "€", "Secteur", is_curated=True,
+        note="Sélection maison des principales valeurs du CAC 40, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
+    ),
+    "dax40": MarketConfig(
+        "dax40", "DAX 40, grandes capitalisations (Allemagne)", load_dax40_leaders, "", "€", "Secteur", is_curated=True,
+        note="Sélection maison des principales valeurs du DAX 40, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
+    ),
+    "sx5e": MarketConfig(
+        "sx5e", "Euro Stoxx 50, SX5E (Zone euro)", load_sx5e_leaders, "", "€", "Secteur", is_curated=True,
+        note="Sélection maison proche de la composition du EURO STOXX 50, liste non exhaustive.",
+    ),
     "ftse100": MarketConfig("ftse100", "FTSE 100 (Royaume-Uni)", load_ftse100, ".L", "£", "Secteur"),
-    "nikkei225": MarketConfig("nikkei225", "Nikkei 225 (Japon)", load_nikkei225, ".T", "¥", "Secteur"),
+    "nikkei225": MarketConfig(
+        "nikkei225", "Nikkei 225, grandes capitalisations (Japon)", load_nikkei_leaders, "", "¥", "Secteur", is_curated=True,
+        note="Sélection maison des principales valeurs du Nikkei 225, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
+    ),
     "hangseng": MarketConfig("hangseng", "Hang Seng (Hong Kong)", load_hangseng, ".HK", "HK$", "Secteur"),
     "kospi": MarketConfig(
         "kospi", "Kospi, grandes capitalisations (Corée)", load_kospi_leaders, "", "₩", "Secteur", is_curated=True,
@@ -609,7 +708,7 @@ def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> N
 
 def infer_currency(ticker: str) -> str:
     t = ticker.upper()
-    if t.endswith(".PA") or t.endswith(".DE"):
+    if t.endswith(".PA") or t.endswith(".DE") or t.endswith(".MC") or t.endswith(".MI") or t.endswith(".AS"):
         return "€"
     if t.endswith(".L"):
         return "£"
@@ -690,7 +789,8 @@ def _build_aliases() -> dict:
         "unilever": ("UL", "Unilever"), "gsk": ("GSK", "GSK"),
     }
     aliases = dict(raw)
-    for loader in (load_tech_trending, load_crypto_top, load_kospi_leaders, load_asia_tech_leaders):
+    for loader in (load_tech_trending, load_crypto_top, load_kospi_leaders, load_asia_tech_leaders,
+                   load_cac40_leaders, load_dax40_leaders, load_nikkei_leaders, load_sx5e_leaders):
         try:
             for _, r in loader().iterrows():
                 key = _norm(r["Nom"])
@@ -849,7 +949,7 @@ if len(universe_df) == 0:
     )
     st.stop()
 
-symbols = (universe_df["Symbol"].astype(str) + market.suffix).tolist()
+symbols = [_ensure_suffix(str(s), market.suffix) for s in universe_df["Symbol"]]
 names_map = dict(zip(symbols, universe_df["Nom"]))
 groups_map = dict(zip(symbols, universe_df["Groupe"]))
 
@@ -941,7 +1041,7 @@ st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 # ══════════════════════════════════════════════════════════════════════════
 # 11B. RECHERCHE LIBRE, TOUS MARCHÉS
 # ══════════════════════════════════════════════════════════════════════════
-st.markdown('#### <span class="gradient-text">Rechercher un titre, tous marchés</span>', unsafe_allow_html=True)
+st.markdown('#### <span class="gradient-text">Rechercher un titre, sur tous les marchés</span>', unsafe_allow_html=True)
 st.markdown(
     '<div class="panel-sub">Ticker (ex: MC.PA, ^FCHI, AAPL) ou nom d\'entreprise (ex: Orange, Sanofi, Apple). '
     'Indépendant du marché sélectionné ci-contre.</div>',
