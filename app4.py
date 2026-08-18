@@ -1,6 +1,6 @@
 """
 ================================================================================
- PRO SCREENER : Opportunités Court Terme et Rebond (Multi-Marchés)
+ PRO SCREENER : Opportunites Court Terme et Rebond (Multi-Marches)
 ================================================================================
 Application Streamlit pour détecter des actions/cryptos en survente présentant
 un volume anormal et des signaux techniques de rebond, sur n'importe quel
@@ -42,7 +42,8 @@ from plotly.subplots import make_subplots
 
 
 def _build_favicon() -> Image.Image:
-    """Construit l'icône d'onglet du navigateur sous forme d'image bitmap.
+    """Construit l'icône d'onglet du navigateur sous forme d'image bitmap,
+    avec le même dégradé rouge/orangé que la police des titres.
 
     Un simple caractère Unicode ('▣') passé à page_icon dépend du support
     emoji/police du navigateur et ne s'affiche pas de façon fiable partout :
@@ -51,16 +52,49 @@ def _build_favicon() -> Image.Image:
     mouvements du marché affiché dans la page (le "ticker tape").
     """
     size = 64
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
+    stops = [(240, 70, 110), (255, 106, 69), (245, 166, 35)]  # rose -> orange -> ambre
+    grad_row = Image.new("RGB", (size, 1))
+    for x in range(size):
+        t = x / (size - 1)
+        if t <= 0.45:
+            lt = t / 0.45
+            c = tuple(int(stops[0][i] + (stops[1][i] - stops[0][i]) * lt) for i in range(3))
+        else:
+            lt = (t - 0.45) / 0.55
+            c = tuple(int(stops[1][i] + (stops[2][i] - stops[1][i]) * lt) for i in range(3))
+        grad_row.putpixel((x, 0), c)
+    gradient = grad_row.resize((size, size))
+
+    mask = Image.new("L", (size, size), 0)
+    mdraw = ImageDraw.Draw(mask)
     margin = 4
-    draw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=12,
-                            outline=(34, 197, 94, 255), width=7)
+    mdraw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=12, outline=255, width=7)
     inner = size * 0.30
     cx = cy = size / 2
-    draw.rectangle([cx - inner / 2, cy - inner / 2, cx + inner / 2, cy + inner / 2],
-                    fill=(34, 197, 94, 255))
+    mdraw.rectangle([cx - inner / 2, cy - inner / 2, cx + inner / 2, cy + inner / 2], fill=255)
+
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    img.paste(gradient, (0, 0), mask)
     return img
+
+
+def render_hero_icon_svg(size: int = 40) -> str:
+    """Icône affichée à côté du titre principal, avec le même dégradé que
+    le favicon et que le texte en dégradé (.gradient-text)."""
+    return f"""
+    <svg class="hero-icon" width="{size}" height="{size}" viewBox="0 0 64 64"
+         xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <linearGradient id="heroIconGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#F0466E"/>
+          <stop offset="45%" stop-color="#FF6A45"/>
+          <stop offset="100%" stop-color="#F5A623"/>
+        </linearGradient>
+      </defs>
+      <rect x="5" y="5" width="54" height="54" rx="12" fill="none" stroke="url(#heroIconGrad)" stroke-width="7"/>
+      <rect x="24" y="24" width="16" height="16" fill="url(#heroIconGrad)"/>
+    </svg>
+    """
 
 
 st.set_page_config(
@@ -118,8 +152,10 @@ def inject_style() -> None:
         .hero-badge{ display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em;
                       color:var(--emerald); background:var(--emerald-soft); border:1px solid rgba(34,197,94,.35);
                       border-radius:999px; padding:4px 12px; margin-bottom:12px; text-transform:uppercase; }
-        .hero h1{ font-size:2.1rem; margin:0 0 6px 0; }
-        .hero p{ color:var(--text-lo); font-size:.98rem; max-width:760px; margin:0; }
+        .hero-title-row{ display:flex; align-items:center; gap:14px; }
+        .hero-icon{ flex-shrink:0; }
+        .hero h1{ font-size:2.1rem; margin:0; }
+        .hero p{ color:var(--text-lo); font-size:.98rem; max-width:760px; margin:10px 0 0 0; }
 
         /* ---------- Titres en dégradé ---------- */
         .gradient-text{
@@ -177,8 +213,13 @@ def inject_style() -> None:
         /* ---------- Dataframe / tabs ---------- */
         [data-testid="stDataFrame"]{ border:1px solid var(--border); border-radius:12px; overflow:hidden; }
         .stTabs [data-baseweb="tab-list"]{ gap:4px; border-bottom:1px solid var(--border); }
-        .stTabs [data-baseweb="tab"]{ font-family:'Space Grotesk',sans-serif; color:var(--text-lo); }
-        .stTabs [aria-selected="true"]{ color:var(--emerald) !important; }
+        .stTabs [data-baseweb="tab"]{ font-family:'Space Grotesk',sans-serif; font-weight:600; color:var(--text-lo); }
+        .stTabs [aria-selected="true"] p,
+        .stTabs [aria-selected="true"] [data-testid="stMarkdownContainer"]{
+            background:linear-gradient(90deg,#F0466E 0%,#FF6A45 45%,#F5A623 100%);
+            -webkit-background-clip:text; background-clip:text; color:transparent !important;
+            display:inline-block; font-weight:700;
+        }
 
         .footnote{ color:var(--text-lo); font-size:.78rem; line-height:1.5; }
         </style>
@@ -623,8 +664,8 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
 
             rows.append({
                 "Ticker": symbol,
-                "Nom": names_map.get(symbol, symbol),
-                "Groupe": groups_map.get(symbol, "N/A"),
+                "Nom": shorten_name(names_map.get(symbol, symbol)),
+                "Groupe": shorten_sector(groups_map.get(symbol, "N/A")),
                 "Prix": round(last_p, 2),
                 "Var. 1J (%)": round(var_day, 2),
                 "Var. 5J (%)": round(var_5d, 2) if pd.notna(var_5d) else None,
@@ -724,7 +765,94 @@ def infer_currency(ticker: str) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# 4C. RECHERCHE LIBRE, TOUS MARCHÉS (résolution nom -> ticker)
+# 4C. NOMS ET SECTEURS COURTS (jamais tronqués mid-mot dans les tableaux)
+# ══════════════════════════════════════════════════════════════════════════
+
+_LEGAL_SUFFIX_RE = re.compile(
+    r"[,]?\s*(inc\.?|corp(oration)?\.?|co\.?|company|plc|ag|se|n\.?v\.?|s\.?a\.?|"
+    r"ltd\.?|limited|llc|group|holdings?|kgaa|asa|spa)$",
+    flags=re.IGNORECASE,
+)
+
+_NAME_OVERRIDES = {
+    "super micro computer": "Supermicro",
+    "mitsubishi ufj financial group": "Mitsubishi UFJ",
+    "deutsche post dhl group": "DHL Group",
+    "nippon telegraph and telephone": "NTT",
+    "mercedes-benz group": "Mercedes-Benz",
+    "fast retailing (uniqlo)": "Uniqlo",
+    "hon hai / foxconn": "Foxconn",
+    "sea limited (adr)": "Sea Limited",
+    "pdd holdings (adr)": "PDD Holdings",
+}
+
+
+def shorten_name(name: str, max_len: int = 24) -> str:
+    """Nom court et compréhensible plutôt que tronqué au milieu par
+    l'interface : on retire les suffixes juridiques (Inc., Group, SE...)
+    puis, si besoin, on coupe à la dernière frontière de mot entière."""
+    n = str(name).strip()
+    if not n:
+        return n
+    override = _NAME_OVERRIDES.get(n.lower())
+    if override:
+        return override
+    prev = None
+    while prev != n:
+        prev = n
+        n = _LEGAL_SUFFIX_RE.sub("", n).strip()
+    if len(n) > max_len:
+        words = n.split(" ")
+        short = words[0]
+        for w in words[1:]:
+            if len(short) + 1 + len(w) > max_len:
+                break
+            short = f"{short} {w}"
+        n = short
+    return n.strip() or str(name).strip()
+
+
+_SECTOR_SHORT = {
+    "consommation": "Conso",
+    "information technology": "Tech. Info.",
+    "consumer discretionary": "Conso. discr.",
+    "consumer staples": "Conso. base",
+    "communication services": "Communication",
+    "health care": "Santé",
+    "financials": "Finance",
+    "industrials": "Industrie",
+    "real estate": "Immobilier",
+    "materials": "Matériaux",
+    "utilities": "Services publics",
+    "energy": "Énergie",
+    "semi-conducteurs / ia": "Semi-cond. / IA",
+    "semi-conducteurs / electronique": "Semi-cond. / Électro.",
+    "cloud / saas": "Cloud / SaaS",
+    "cloud / ia": "Cloud / IA",
+    "tech / investissement": "Tech / Invest.",
+}
+
+
+def shorten_sector(sector: str, max_len: int = 18) -> str:
+    s = str(sector).strip()
+    if not s:
+        return s
+    override = _SECTOR_SHORT.get(s.lower())
+    if override:
+        return override
+    if len(s) > max_len:
+        words = s.split(" ")
+        short = words[0]
+        for w in words[1:]:
+            if len(short) + 1 + len(w) > max_len:
+                break
+            short = f"{short} {w}"
+        return short.strip()
+    return s
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 4D. RECHERCHE LIBRE, TOUS MARCHÉS (résolution nom -> ticker)
 # ══════════════════════════════════════════════════════════════════════════
 
 def _norm(s: str) -> str:
@@ -919,11 +1047,11 @@ st.sidebar.radio(
 )
 
 with st.sidebar.expander("Critères de sélection", expanded=True):
-    group_options = ["Tous"] + sorted(universe_df["Groupe"].dropna().unique().tolist()) if len(universe_df) else ["Tous"]
+    group_options = ["Tous"] + sorted({shorten_sector(g) for g in universe_df["Groupe"].dropna()}) if len(universe_df) else ["Tous"]
     selected_group = st.selectbox(market.group_label, group_options)
     min_score = st.slider("Score Opportunité Min.", 0, 100, step=5, key="min_score")
     rsi_max = st.slider("RSI Max (zone de survente)", 10, 50, key="rsi_max")
-    volume_filter = st.checkbox("Volume ≥ moyenne 20 jours (≥ 1.0x)", value=True)
+    volume_filter = st.checkbox("Volume ≥ moyenne 20 jours (≥ 1.0x)", value=False)
     search_query = st.text_input("Filtrer le tableau affiché", "")
     st.caption("Pour chercher un titre hors du marché sélectionné, utilisez la recherche libre en haut de page.")
 
@@ -943,7 +1071,8 @@ st.sidebar.caption(f"Dernière analyse : {dt.datetime.now().strftime('%d/%m/%Y %
 if len(universe_df) == 0:
     st.markdown(
         '<div class="hero"><div class="hero-badge">EN ATTENTE</div>'
-        "<h1 class=\"gradient-text\">Screener d'Opportunités, Court Terme et Rebond</h1>"
+        f'<div class="hero-title-row">{render_hero_icon_svg()}'
+        "<h1 class=\"gradient-text\">Screener d'Opportunités, Court Terme et Rebond</h1></div>"
         '<p>Sélectionnez un marché ou saisissez des tickers personnalisés dans la barre latérale pour démarrer l\'analyse.</p></div>',
         unsafe_allow_html=True,
     )
@@ -1005,7 +1134,10 @@ st.markdown(
     f"""
     <div class="hero">
       <div class="hero-badge">MARCHE ACTIF : {market.label}</div>
-      <h1 class="gradient-text">Screener d'Opportunités, Court Terme et Rebond</h1>
+      <div class="hero-title-row">
+        {render_hero_icon_svg()}
+        <h1 class="gradient-text">Screener d'Opportunités, Court Terme et Rebond</h1>
+      </div>
       <p>Détection automatisée des titres en survente, avec volume anormal et signaux techniques
       de retournement (RSI, Bandes de Bollinger, MACD), adaptable à tous les marchés.</p>
     </div>
@@ -1104,7 +1236,6 @@ with tab_table:
             st.dataframe(
                 display_df,
                 width="stretch",
-                height=min(70 + 36 * len(display_df), 620),
                 hide_index=True,
                 column_config={
                     "Score Opp.": st.column_config.ProgressColumn(format="%d/100", min_value=0, max_value=100),
