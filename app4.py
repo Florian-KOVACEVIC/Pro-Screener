@@ -1,7 +1,12 @@
 """
-===========================================================================
- PRO SCREENER : Opportunités Court Terme et Rebond (Multi-Marchés)
-===========================================================================
+================================================================================
+ PRO SCREENER : Opportunites Court Terme et Rebond (Multi-Marches)
+================================================================================
+Application Streamlit pour détecter des actions/cryptos en survente présentant
+un volume anormal et des signaux techniques de rebond, sur n'importe quel
+marché : indices US (S&P 500, Nasdaq 100, Dow 30), indices européens
+(CAC 40, DAX 40, FTSE 100), une sélection thématique "Tech & IA en vogue",
+un panier de cryptomonnaies majeures, ou une liste de tickers personnalisée.
 
 Architecture :
   1. Configuration & style (thème "terminal de trading")
@@ -10,7 +15,7 @@ Architecture :
   4. Moteur de scoring d'opportunité
   5. Pipeline de récupération & d'analyse des données (mise en cache)
   6. Interface utilisateur (sidebar, KPIs, spotlight, onglets)
-===========================================================================
+================================================================================
 """
 
 import io
@@ -34,6 +39,7 @@ from plotly.subplots import make_subplots
 # ══════════════════════════════════════════════════════════════════════════
 # 1. CONFIGURATION DE PAGE & STYLE
 # ══════════════════════════════════════════════════════════════════════════
+
 
 def _build_favicon() -> Image.Image:
     """Construit l'icône d'onglet du navigateur sous forme d'image bitmap,
@@ -71,6 +77,7 @@ def _build_favicon() -> Image.Image:
     img.paste(gradient, (0, 0), mask)
     return img
 
+
 def render_hero_icon_svg(size: int = 40) -> str:
     """Icône affichée à côté du titre principal, avec le même dégradé que
     le favicon et que le texte en dégradé (.gradient-text).
@@ -90,6 +97,7 @@ def render_hero_icon_svg(size: int = 40) -> str:
         '<rect x="5" y="5" width="54" height="54" rx="12" fill="none" stroke="url(#heroIconGrad)" stroke-width="7"/>'
         '<rect x="24" y="24" width="16" height="16" fill="url(#heroIconGrad)"/></svg>'
     )
+
 
 st.set_page_config(
     page_title="Pro Screener, Multi-Marches",
@@ -196,8 +204,8 @@ def inject_style() -> None:
         /* ---------- Spotlight cards ---------- */
         .opp-card{ padding:2px 2px 4px 2px; }
         .opp-rank{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-lo); text-transform:uppercase; letter-spacing:.08em; }
-        .opp-ticker{ font-family:'Space Grotesk',sans-serif; font-size:1.35rem; font-weight:700; color:var(--text-hi); margin:2px 0 0 0; }
-        .opp-name{ color:var(--text-lo); font-size:.82rem; margin-bottom:10px; }
+        .opp-name{ font-family:'Space Grotesk',sans-serif; font-size:1.35rem; font-weight:700; color:var(--text-hi); margin:2px 0 0 0; line-height:1.2; }
+        .opp-ticker{ font-family:'IBM Plex Mono',monospace; font-size:.8rem; color:var(--text-lo); letter-spacing:.03em; margin-bottom:10px; }
         .opp-price{ font-family:'IBM Plex Mono',monospace; font-size:1.05rem; color:var(--text-hi); }
 
         /* ---------- Panneaux (graphiques / tableaux) ---------- */
@@ -247,6 +255,7 @@ inject_style()
 # ══════════════════════════════════════════════════════════════════════════
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
+
 @dataclass
 class MarketConfig:
     key: str
@@ -257,6 +266,7 @@ class MarketConfig:
     group_label: str = "Secteur"
     is_curated: bool = False  # True = liste maison, pas une composition officielle d'indice
     note: str = ""
+
 
 def _best_wiki_table(url: str, ticker_keys: list[str], name_keys: list[str]) -> pd.DataFrame:
     """Récupère la page Wikipedia et retourne la première table qui contient
@@ -274,11 +284,13 @@ def _best_wiki_table(url: str, ticker_keys: list[str], name_keys: list[str]) -> 
             return t
     raise ValueError("table des composants introuvable sur la page Wikipedia")
 
+
 def _col(df: pd.DataFrame, keys: list[str]) -> Optional[str]:
     for c in df.columns:
         if any(k in str(c).lower() for k in keys):
             return c
     return None
+
 
 def _clean_cell(series: pd.Series) -> pd.Series:
     """Nettoie une colonne extraite de Wikipedia : notes de bas de page
@@ -310,7 +322,8 @@ def _ensure_suffix(ticker: str, suffix: str) -> str:
         return ticker
     return ticker if ticker.upper().endswith(suffix.upper()) else ticker + suffix
 
-# ---- Chargeurs d'indices officiels ---------
+
+# ---- Chargeurs d'indices officiels (scraping Wikipedia en direct) ---------
 # NB : par prudence, aucune liste de secours codée en dur n'est utilisée pour
 # les indices officiels ci-dessous : une composition d'indice inventee ou
 # obsolète serait trompeuse. En cas d'échec du scraping, l'app affiche une
@@ -321,10 +334,12 @@ def load_sp500() -> pd.DataFrame:
     t = _best_wiki_table("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", ["symbol"], ["security", "company"])
     return _standardize(t, ["symbol"], ["security", "company"], ["gics sector", "sector"])
 
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_nasdaq100() -> pd.DataFrame:
     t = _best_wiki_table("https://en.wikipedia.org/wiki/Nasdaq-100", ["ticker", "symbol"], ["company"])
     return _standardize(t, ["ticker", "symbol"], ["company"], ["gics sector", "sector"])
+
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_dow30() -> pd.DataFrame:
@@ -337,12 +352,14 @@ def load_ftse100() -> pd.DataFrame:
     t = _best_wiki_table("https://en.wikipedia.org/wiki/FTSE_100_Index", ["ticker", "epic"], ["company", "name"])
     return _standardize(t, ["ticker", "epic"], ["company", "name"], ["sector", "industry", "ftse industry"], clean_dot=False)
 
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_hangseng() -> pd.DataFrame:
     t = _best_wiki_table("https://en.wikipedia.org/wiki/Hang_Seng_Index", ["ticker", "sehk", "code", "symbol"], ["constituent", "company", "name"])
     df = _standardize(t, ["ticker", "sehk", "code", "symbol"], ["constituent", "company", "name"], ["sector", "industry"], clean_dot=False)
     df["Symbol"] = df["Symbol"].str.extract(r"(\d+)")[0].str.zfill(4)
     return df.dropna(subset=["Symbol"]).drop_duplicates(subset="Symbol").reset_index(drop=True)
+
 
 # ---- Listes curées (explicitement non-officielles, usage illustratif) -----
 #
@@ -352,6 +369,7 @@ def load_hangseng() -> pd.DataFrame:
 # provoquant l'échec du téléchargement des cours). Une liste maison stable
 # et honnêtement annoncée comme non exhaustive est préférable à une source
 # qui échoue une fois sur deux.
+
 
 def load_cac40_leaders() -> pd.DataFrame:
     data = [
@@ -374,6 +392,7 @@ def load_cac40_leaders() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
+
 def load_dax40_leaders() -> pd.DataFrame:
     data = [
         ("SAP", "SAP", "Logiciels"), ("SIE.DE", "Siemens", "Industrie"),
@@ -388,6 +407,7 @@ def load_dax40_leaders() -> pd.DataFrame:
         ("FRE.DE", "Fresenius", "Santé"), ("VNA.DE", "Vonovia", "Immobilier"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
 
 def load_nikkei_leaders() -> pd.DataFrame:
     data = [
@@ -404,6 +424,7 @@ def load_nikkei_leaders() -> pd.DataFrame:
         ("4502.T", "Takeda Pharmaceutical", "Santé"), ("7201.T", "Nissan Motor", "Automobile"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
 
 def load_sx5e_leaders() -> pd.DataFrame:
     """Grandes valeurs de la zone euro proches de la composition du
@@ -424,6 +445,7 @@ def load_sx5e_leaders() -> pd.DataFrame:
         ("BN.PA", "Danone", "Consommation"), ("SAF.PA", "Safran", "Aéronautique"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
 
 def load_kospi_leaders() -> pd.DataFrame:
     """Sélection maison des plus grandes capitalisations cotées au KOSPI.
@@ -446,6 +468,7 @@ def load_kospi_leaders() -> pd.DataFrame:
         ("055550.KS", "Shinhan Financial Group", "Finance"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
 
 def load_asia_tech_leaders() -> pd.DataFrame:
     """Sélection maison de grandes valeurs technologiques asiatiques
@@ -484,6 +507,7 @@ def load_tech_trending() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
+
 def load_crypto_top() -> pd.DataFrame:
     data = [
         ("BTC-USD", "Bitcoin", "Réserve de valeur"), ("ETH-USD", "Ethereum", "Layer 1"),
@@ -501,6 +525,7 @@ def load_crypto_top() -> pd.DataFrame:
         ("ARB-USD", "Arbitrum", "Layer 2"), ("OP-USD", "Optimism", "Layer 2"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
 
 MARKETS: dict[str, MarketConfig] = {
     "sp500": MarketConfig("sp500", "S&P 500 (États-Unis)", load_sp500, "", "$", "Secteur GICS"),
@@ -575,6 +600,7 @@ def compute_indicators(df: pd.DataFrame) -> dict:
     return dict(rsi=rsi, sma20=sma20, boll_up=boll_up, boll_low=boll_low,
                 vol_ratio=vol_ratio, macd=macd, macd_signal=macd_signal, macd_hist=macd_hist)
 
+
 def _ramp_score(value, lo, hi, max_pts):
     """max_pts si value<=lo, 0 si value>=hi, interpolation linéaire entre les deux.
     Évite les paliers brutaux (ex : RSI 39,9 valant 15 pts de plus que RSI 40,1)."""
@@ -583,6 +609,7 @@ def _ramp_score(value, lo, hi, max_pts):
     if value >= hi:
         return 0.0
     return max_pts * (hi - value) / (hi - lo)
+
 
 def compute_score(rsi, price, boll_low, boll_mid, vol_ratio, macd_hist_prev, macd_hist_last,
                    pct_from_low, var_1j, var_5j) -> int:
@@ -640,6 +667,7 @@ def compute_score(rsi, price, boll_low, boll_mid, vol_ratio, macd_hist_prev, mac
         score += max(0.0, 10.0 - pct_from_low / 2.0)
 
     return int(round(min(max(score, 0.0), 100.0)))
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # 4. PIPELINE DE RÉCUPÉRATION & D'ANALYSE
@@ -726,8 +754,9 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
 
     return pd.DataFrame(rows), None, skipped
 
+
 # ══════════════════════════════════════════════════════════════════════════
-# 4B. CARTES D'OPPORTUNITE & JAUGE DE SCORE
+# 4B. CARTES D'OPPORTUNITE & JAUGE DE SCORE (SVG)
 # ══════════════════════════════════════════════════════════════════════════
 
 def render_gauge_svg(score: int) -> str:
@@ -762,6 +791,7 @@ def render_gauge_svg(score: int) -> str:
         '</svg></div>'
     )
 
+
 def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> None:
     """Affiche le contenu d'une carte d'opportunité (texte + jauge). À
     appeler à l'intérieur d'un `st.container(border=True)`."""
@@ -778,8 +808,8 @@ def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> N
         f"""
         <div class="opp-card">
           <div class="opp-rank">{rank_label}</div>
-          <div class="opp-ticker">{row['Ticker']}</div>
           <div class="opp-name">{row['Nom']}</div>
+          <div class="opp-ticker">{row['Ticker']}</div>
           <div class="opp-price">{currency}{row['Prix']:.2f}</div>
           <div>{badges}</div>
         </div>
@@ -805,6 +835,7 @@ def infer_currency(ticker: str) -> str:
         return "NT$"
     return "$"
 
+
 # ══════════════════════════════════════════════════════════════════════════
 # 4C. NOMS ET SECTEURS COURTS (jamais tronqués mid-mot dans les tableaux)
 # ══════════════════════════════════════════════════════════════════════════
@@ -826,6 +857,7 @@ _NAME_OVERRIDES = {
     "sea limited (adr)": "Sea Limited",
     "pdd holdings (adr)": "PDD Holdings",
 }
+
 
 def shorten_name(name: str, max_len: int = 24) -> str:
     """Nom court et compréhensible plutôt que tronqué au milieu par
@@ -851,6 +883,7 @@ def shorten_name(name: str, max_len: int = 24) -> str:
         n = short
     return n.strip() or str(name).strip()
 
+
 _SECTOR_SHORT = {
     "consommation": "Conso",
     "information technology": "Tech. Info.",
@@ -871,6 +904,7 @@ _SECTOR_SHORT = {
     "tech / investissement": "Tech / Invest.",
 }
 
+
 def shorten_sector(sector: str, max_len: int = 18) -> str:
     s = str(sector).strip()
     if not s:
@@ -888,8 +922,9 @@ def shorten_sector(sector: str, max_len: int = 18) -> str:
         return short.strip()
     return s
 
+
 # ══════════════════════════════════════════════════════════════════════════
-# 4D. RECHERCHE LIBRE, TOUS LES MARCHÉS
+# 4D. RECHERCHE LIBRE, TOUS MARCHÉS (résolution nom -> ticker)
 # ══════════════════════════════════════════════════════════════════════════
 
 def _norm(s: str) -> str:
@@ -965,7 +1000,9 @@ def _build_aliases() -> dict:
             continue
     return {k: v for k, v in aliases.items() if k}
 
+
 ALIASES = _build_aliases()
+
 
 def resolve_query_to_ticker(query: str, universe_df: pd.DataFrame, results_df: pd.DataFrame):
     """Résout une saisie libre (ticker ou nom d'entreprise) en un ticker
@@ -1015,6 +1052,7 @@ def resolve_query_to_ticker(query: str, universe_df: pd.DataFrame, results_df: p
 
     return None, None
 
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_single_ticker(ticker: str, display_name: str):
     """Récupère et analyse un seul ticker, indépendamment du marché
@@ -1024,6 +1062,46 @@ def fetch_single_ticker(ticker: str, display_name: str):
     if err or df_result.empty:
         return None
     return df_result.iloc[0]
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def fetch_chart_history(ticker: str) -> pd.DataFrame:
+    """Historique dédié pour l'onglet graphique (5 ans, quotidien), séparé
+    du fetch d'analyse global (limité à 1 an pour ne pas ralentir le
+    screening de tout un marché). Permet les plages longues (1A, 5A, Tout)."""
+    try:
+        data = yf.download(ticker, period="5y", interval="1d", progress=False, auto_adjust=True)
+        if data.empty:
+            return pd.DataFrame()
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.get_level_values(0)
+        return data.dropna(subset=["Close"])
+    except Exception:
+        return pd.DataFrame()
+
+
+def slice_by_range(df: pd.DataFrame, range_key: str) -> pd.DataFrame:
+    """Découpe l'historique selon une plage classique (façon Yahoo Finance /
+    Google Finance). L'app ne récupère que des barres quotidiennes (pas de
+    données intrajournalières), donc '5 jours' affiche les 5 dernières
+    séances quotidiennes plutôt que des chandelles intraday."""
+    if df.empty:
+        return df
+    last_date = df.index.max()
+    if range_key == "5J":
+        return df.tail(5)
+    if range_key == "1M":
+        return df[df.index >= last_date - pd.Timedelta(days=31)]
+    if range_key == "6M":
+        return df[df.index >= last_date - pd.Timedelta(days=183)]
+    if range_key == "YTD":
+        return df[df.index >= pd.Timestamp(year=last_date.year, month=1, day=1)]
+    if range_key == "1A":
+        return df[df.index >= last_date - pd.Timedelta(days=366)]
+    if range_key == "5A":
+        return df[df.index >= last_date - pd.Timedelta(days=5 * 366)]
+    return df  # "Tout"
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # 5. SIDEBAR : SELECTION DU MARCHE ET FILTRES
@@ -1064,14 +1142,17 @@ PRESETS = {
     "Agressif": {"score": 25, "rsi": 45},
 }
 
+
 def _apply_preset():
     p = PRESETS.get(st.session_state.get("preset_choice"))
     if p:
         st.session_state["min_score"] = p["score"]
         st.session_state["rsi_max"] = p["rsi"]
 
+
 def _mark_custom():
     st.session_state["preset_choice"] = "Personnalisé"
+
 
 st.session_state.setdefault("min_score", 40)
 st.session_state.setdefault("rsi_max", 35)
@@ -1215,7 +1296,7 @@ if len(filtered) > 0:
     cols = st.columns(len(top3))
     for i, (col, (_, row)) in enumerate(zip(cols, top3.iterrows())):
         with col, st.container(border=True):
-            render_opportunity_card(row, market.currency, f"Opportunité n. {i + 1}")
+            render_opportunity_card(row, market.currency, f"Opportunité n°{i + 1}")
 
 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
@@ -1357,9 +1438,26 @@ with tab_chart:
         st.info("Pas de données à afficher.")
     else:
         pool = filtered if len(filtered) > 0 else results_df
-        selected_ticker = st.selectbox("Sélectionner un titre :", pool["Ticker"].tolist())
+        ticker_list = pool["Ticker"].tolist()
+        name_by_ticker = dict(zip(pool["Ticker"], pool["Nom"]))
+        selected_ticker = st.selectbox(
+            "Sélectionner un titre :", ticker_list,
+            format_func=lambda t: f"{name_by_ticker.get(t, t)} ({t})",
+        )
         stock_row = results_df[results_df["Ticker"] == selected_ticker].iloc[0]
-        stock_data = stock_row["_history"]
+
+        range_labels = {"5J": "5 jours", "1M": "1 mois", "6M": "6 mois", "YTD": "YTD",
+                         "1A": "1 an", "5A": "5 ans", "Tout": "Tout"}
+        selected_range = st.radio(
+            "Plage", list(range_labels.keys()), format_func=lambda k: range_labels[k],
+            horizontal=True, key="chart_range", index=4,
+        )
+
+        with st.spinner("Chargement de l'historique..."):
+            full_history = fetch_chart_history(selected_ticker)
+        stock_data = slice_by_range(full_history, selected_range) if not full_history.empty else stock_row["_history"]
+        if stock_data.empty:
+            stock_data = stock_row["_history"]
         ind = compute_indicators(stock_data)
 
         fig = make_subplots(
@@ -1395,6 +1493,14 @@ with tab_chart:
             legend=dict(orientation="h", yanchor="bottom", y=1.01, x=0),
             hovermode="x unified",
         )
+        # Masque les week-ends (et jours fériés, absents des données) sur l'axe des temps :
+        # sans cela, Plotly traite l'axe X comme du temps continu et laisse un "trou" visuel
+        # chaque lundi/après-jour-férié, ce qui casse la lisibilité des chandeliers.
+        if len(stock_data) > 1:
+            all_days = pd.date_range(start=stock_data.index.min(), end=stock_data.index.max(), freq="D")
+            present = set(stock_data.index.normalize())
+            missing_weekdays = [d for d in all_days if d.weekday() < 5 and d not in present]
+            fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"]), dict(values=missing_weekdays)])
         fig.update_xaxes(gridcolor="#232C42")
         fig.update_yaxes(gridcolor="#232C42")
         fig.update_yaxes(title_text=f"Prix ({market.currency})", row=1, col=1)
@@ -1403,12 +1509,14 @@ with tab_chart:
 
         with st.container(border=True):
             st.markdown(
-                f'<div class="panel-title">{selected_ticker} : prix, volume et RSI</div>',
+                f'<div class="panel-title">{name_by_ticker.get(selected_ticker, selected_ticker)} : '
+                f'prix, volume et RSI</div>',
                 unsafe_allow_html=True,
             )
             st.markdown(
-                '<div class="panel-sub">Bandes de Bollinger (20j, 2σ) et SMA 20 en superposition du prix, '
-                'seuils de survente/surachat à 30 et 70 sur le RSI.</div>',
+                f'<div class="panel-sub">Plage : {range_labels[selected_range]} · Bandes de Bollinger (20j, 2σ) '
+                'et SMA 20 en superposition du prix, seuils de survente/surachat à 30 et 70 sur le RSI. '
+                'Week-ends et jours fériés masqués sur l\'axe des temps.</div>',
                 unsafe_allow_html=True,
             )
             st.plotly_chart(fig, width="stretch", key="main_chart")
@@ -1454,9 +1562,12 @@ with tab_about:
 st.markdown(
     """
     <div class="disclaimer">
-    Les résultats fournis par cette application reposent sur des indicateurs techniques (RSI, Bandes de Bollinger, MACD, ratio de volume) et sont présentés à titre purement informatif et pédagogique. 
-    Ils ne constituent en aucun cas un conseil en investissement, une recommandation d'achat ou de vente, ni une garantie de résultat. Les marchés actions et cryptomonnaies comportent des risques significatifs, 
-    y compris la perte totale du capital investi. Les calculs peuvent contenir des approximations ou retards inhérents aux données (Yahoo Finance, Wikipedia). 
+    Les résultats fournis par cette application reposent sur des indicateurs techniques
+    (RSI, Bandes de Bollinger, MACD, ratio de volume) et sont présentés à titre purement informatif
+    et pédagogique. Ils ne constituent en aucun cas un conseil en investissement, une recommandation
+    d'achat ou de vente, ni une garantie de résultat. Les marchés actions et cryptomonnaies comportent
+    des risques significatifs, y compris la perte totale du capital investi. Les calculs peuvent
+    contenir des approximations ou retards inhérents aux données (Yahoo Finance, Wikipedia).
     Consultez un professionnel agréé avant toute décision d'investissement.
     </div>
     """,
