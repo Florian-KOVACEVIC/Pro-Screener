@@ -1,12 +1,7 @@
 """
-================================================================================
- PRO SCREENER : Opportunites Court Terme et Rebond (Multi-Marches)
-================================================================================
-Application Streamlit pour détecter des actions/cryptos en survente présentant
-un volume anormal et des signaux techniques de rebond, sur n'importe quel
-marché : indices US (S&P 500, Nasdaq 100, Dow 30), indices européens
-(CAC 40, DAX 40, FTSE 100), une sélection thématique "Tech & IA en vogue",
-un panier de cryptomonnaies majeures, ou une liste de tickers personnalisée.
+===========================================================================
+ PRO SCREENER : Opportunités Court Terme et Rebond (Multi-Marchés)
+===========================================================================
 
 Architecture :
   1. Configuration & style (thème "terminal de trading")
@@ -15,7 +10,7 @@ Architecture :
   4. Moteur de scoring d'opportunité
   5. Pipeline de récupération & d'analyse des données (mise en cache)
   6. Interface utilisateur (sidebar, KPIs, spotlight, onglets)
-================================================================================
+===========================================================================
 """
 
 import io
@@ -39,7 +34,6 @@ from plotly.subplots import make_subplots
 # ══════════════════════════════════════════════════════════════════════════
 # 1. CONFIGURATION DE PAGE & STYLE
 # ══════════════════════════════════════════════════════════════════════════
-
 
 def _build_favicon() -> Image.Image:
     """Construit l'icône d'onglet du navigateur sous forme d'image bitmap,
@@ -77,7 +71,6 @@ def _build_favicon() -> Image.Image:
     img.paste(gradient, (0, 0), mask)
     return img
 
-
 def render_hero_icon_svg(size: int = 40) -> str:
     """Icône affichée à côté du titre principal, avec le même dégradé que
     le favicon et que le texte en dégradé (.gradient-text).
@@ -97,7 +90,6 @@ def render_hero_icon_svg(size: int = 40) -> str:
         '<rect x="5" y="5" width="54" height="54" rx="12" fill="none" stroke="url(#heroIconGrad)" stroke-width="7"/>'
         '<rect x="24" y="24" width="16" height="16" fill="url(#heroIconGrad)"/></svg>'
     )
-
 
 st.set_page_config(
     page_title="Pro Screener, Multi-Marches",
@@ -255,7 +247,6 @@ inject_style()
 # ══════════════════════════════════════════════════════════════════════════
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-
 @dataclass
 class MarketConfig:
     key: str
@@ -266,7 +257,6 @@ class MarketConfig:
     group_label: str = "Secteur"
     is_curated: bool = False  # True = liste maison, pas une composition officielle d'indice
     note: str = ""
-
 
 def _best_wiki_table(url: str, ticker_keys: list[str], name_keys: list[str]) -> pd.DataFrame:
     """Récupère la page Wikipedia et retourne la première table qui contient
@@ -284,13 +274,11 @@ def _best_wiki_table(url: str, ticker_keys: list[str], name_keys: list[str]) -> 
             return t
     raise ValueError("table des composants introuvable sur la page Wikipedia")
 
-
 def _col(df: pd.DataFrame, keys: list[str]) -> Optional[str]:
     for c in df.columns:
         if any(k in str(c).lower() for k in keys):
             return c
     return None
-
 
 def _clean_cell(series: pd.Series) -> pd.Series:
     """Nettoie une colonne extraite de Wikipedia : notes de bas de page
@@ -322,8 +310,7 @@ def _ensure_suffix(ticker: str, suffix: str) -> str:
         return ticker
     return ticker if ticker.upper().endswith(suffix.upper()) else ticker + suffix
 
-
-# ---- Chargeurs d'indices officiels (scraping Wikipedia en direct) ---------
+# ---- Chargeurs d'indices officiels ---------
 # NB : par prudence, aucune liste de secours codée en dur n'est utilisée pour
 # les indices officiels ci-dessous : une composition d'indice inventee ou
 # obsolète serait trompeuse. En cas d'échec du scraping, l'app affiche une
@@ -334,12 +321,10 @@ def load_sp500() -> pd.DataFrame:
     t = _best_wiki_table("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", ["symbol"], ["security", "company"])
     return _standardize(t, ["symbol"], ["security", "company"], ["gics sector", "sector"])
 
-
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_nasdaq100() -> pd.DataFrame:
     t = _best_wiki_table("https://en.wikipedia.org/wiki/Nasdaq-100", ["ticker", "symbol"], ["company"])
     return _standardize(t, ["ticker", "symbol"], ["company"], ["gics sector", "sector"])
-
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_dow30() -> pd.DataFrame:
@@ -352,14 +337,12 @@ def load_ftse100() -> pd.DataFrame:
     t = _best_wiki_table("https://en.wikipedia.org/wiki/FTSE_100_Index", ["ticker", "epic"], ["company", "name"])
     return _standardize(t, ["ticker", "epic"], ["company", "name"], ["sector", "industry", "ftse industry"], clean_dot=False)
 
-
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_hangseng() -> pd.DataFrame:
     t = _best_wiki_table("https://en.wikipedia.org/wiki/Hang_Seng_Index", ["ticker", "sehk", "code", "symbol"], ["constituent", "company", "name"])
     df = _standardize(t, ["ticker", "sehk", "code", "symbol"], ["constituent", "company", "name"], ["sector", "industry"], clean_dot=False)
     df["Symbol"] = df["Symbol"].str.extract(r"(\d+)")[0].str.zfill(4)
     return df.dropna(subset=["Symbol"]).drop_duplicates(subset="Symbol").reset_index(drop=True)
-
 
 # ---- Listes curées (explicitement non-officielles, usage illustratif) -----
 #
@@ -369,7 +352,6 @@ def load_hangseng() -> pd.DataFrame:
 # provoquant l'échec du téléchargement des cours). Une liste maison stable
 # et honnêtement annoncée comme non exhaustive est préférable à une source
 # qui échoue une fois sur deux.
-
 
 def load_cac40_leaders() -> pd.DataFrame:
     data = [
@@ -392,7 +374,6 @@ def load_cac40_leaders() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
-
 def load_dax40_leaders() -> pd.DataFrame:
     data = [
         ("SAP", "SAP", "Logiciels"), ("SIE.DE", "Siemens", "Industrie"),
@@ -407,7 +388,6 @@ def load_dax40_leaders() -> pd.DataFrame:
         ("FRE.DE", "Fresenius", "Santé"), ("VNA.DE", "Vonovia", "Immobilier"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
-
 
 def load_nikkei_leaders() -> pd.DataFrame:
     data = [
@@ -424,7 +404,6 @@ def load_nikkei_leaders() -> pd.DataFrame:
         ("4502.T", "Takeda Pharmaceutical", "Santé"), ("7201.T", "Nissan Motor", "Automobile"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
-
 
 def load_sx5e_leaders() -> pd.DataFrame:
     """Grandes valeurs de la zone euro proches de la composition du
@@ -445,7 +424,6 @@ def load_sx5e_leaders() -> pd.DataFrame:
         ("BN.PA", "Danone", "Consommation"), ("SAF.PA", "Safran", "Aéronautique"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
-
 
 def load_kospi_leaders() -> pd.DataFrame:
     """Sélection maison des plus grandes capitalisations cotées au KOSPI.
@@ -468,7 +446,6 @@ def load_kospi_leaders() -> pd.DataFrame:
         ("055550.KS", "Shinhan Financial Group", "Finance"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
-
 
 def load_asia_tech_leaders() -> pd.DataFrame:
     """Sélection maison de grandes valeurs technologiques asiatiques
@@ -507,7 +484,6 @@ def load_tech_trending() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
-
 def load_crypto_top() -> pd.DataFrame:
     data = [
         ("BTC-USD", "Bitcoin", "Réserve de valeur"), ("ETH-USD", "Ethereum", "Layer 1"),
@@ -525,7 +501,6 @@ def load_crypto_top() -> pd.DataFrame:
         ("ARB-USD", "Arbitrum", "Layer 2"), ("OP-USD", "Optimism", "Layer 2"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
-
 
 MARKETS: dict[str, MarketConfig] = {
     "sp500": MarketConfig("sp500", "S&P 500 (États-Unis)", load_sp500, "", "$", "Secteur GICS"),
@@ -600,33 +575,71 @@ def compute_indicators(df: pd.DataFrame) -> dict:
     return dict(rsi=rsi, sma20=sma20, boll_up=boll_up, boll_low=boll_low,
                 vol_ratio=vol_ratio, macd=macd, macd_signal=macd_signal, macd_hist=macd_hist)
 
+def _ramp_score(value, lo, hi, max_pts):
+    """max_pts si value<=lo, 0 si value>=hi, interpolation linéaire entre les deux.
+    Évite les paliers brutaux (ex : RSI 39,9 valant 15 pts de plus que RSI 40,1)."""
+    if value <= lo:
+        return max_pts
+    if value >= hi:
+        return 0.0
+    return max_pts * (hi - value) / (hi - lo)
 
-def compute_score(rsi, price, boll_low, vol_ratio, macd_hist_prev, macd_hist_last, pct_from_low) -> int:
-    """Score d'opportunité 0-100 combinant survente (RSI), extension des
-    Bandes de Bollinger, anomalie de volume, retournement MACD naissant et
-    proximité du plus bas sur la période observée."""
-    score = 0
+def compute_score(rsi, price, boll_low, boll_mid, vol_ratio, macd_hist_prev, macd_hist_last,
+                   pct_from_low, var_1j, var_5j) -> int:
+    """Score d'opportunité 0-100. Combine survente (RSI), extension des Bandes
+    de Bollinger, momentum baissier récent, anomalie de volume, retournement
+    MACD naissant et proximité du plus bas sur la période.
+
+    Deux choix structurants par rapport à une simple somme de seuils booléens :
+    - Les composantes RSI et "plus bas de la période" sont en rampe continue
+      plutôt qu'à paliers : un RSI de 40,1 n'attribue plus 15 points de moins
+      qu'un RSI de 39,9.
+    - Un momentum de baisse récent (Var. 1J / 5J) est explicitement récompensé,
+      et un rebond récent réduit le score même si RSI/Bollinger restent
+      techniquement en zone de survente (ces indicateurs réagissent avec
+      retard et peuvent laisser un titre "collé" en haut du classement
+      plusieurs jours après que l'opportunité s'est déjà estompée).
+    """
+    score = 0.0
+
+    # RSI (0-25 pts) : rampe continue de 25 pts à RSI<=15 jusqu'à 0 pt à RSI>=50.
     if pd.notna(rsi):
-        if rsi < 30:
-            score += 30
-        elif rsi < 40:
-            score += 15
-    if pd.notna(boll_low) and price <= boll_low:
-        score += 20
-    if pd.notna(vol_ratio):
-        if vol_ratio > 1.5:
-            score += 20
-        elif vol_ratio > 1.2:
-            score += 10
-    if pd.notna(macd_hist_prev) and pd.notna(macd_hist_last) and macd_hist_prev <= 0 and macd_hist_last > 0:
-        score += 15  # croisement haussier naissant du MACD
-    if pd.notna(pct_from_low):
-        if pct_from_low <= 10:
-            score += 15
-        elif pct_from_low <= 20:
-            score += 8
-    return int(min(score, 100))
+        score += _ramp_score(rsi, lo=15, hi=50, max_pts=25)
 
+    # Bandes de Bollinger (0-20 pts) : proportionnel à la profondeur de pénétration
+    # sous la bande basse (normalisée par la largeur du canal), pas un simple booléen.
+    if pd.notna(boll_low) and pd.notna(boll_mid) and price <= boll_low and boll_mid > boll_low:
+        depth = (boll_low - price) / (boll_mid - boll_low)
+        score += min(20, depth * 40)
+
+    # Momentum baissier récent (0-20 pts) : le signal le plus direct d'une opportunité
+    # fraîche. Une variation positive ne retire rien ici (elle rapporte 0), mais réduit
+    # aussi la composante volume ci-dessous.
+    mom = 0.0
+    if pd.notna(var_1j):
+        mom += max(0.0, min(10.0, -var_1j * 2.5))
+    if pd.notna(var_5j):
+        mom += max(0.0, min(10.0, -var_5j * 1.0))
+    score += mom
+
+    # Volume anormal (0-15 pts) : un volume élevé n'est un signal d'opportunité que sur
+    # une séance stable ou baissière (capitulation/distribution). Sur une forte hausse,
+    # un volume élevé est un signal haussier, pas une occasion de repli.
+    if pd.notna(vol_ratio) and vol_ratio > 1.2:
+        vol_pts = min(15.0, (vol_ratio - 1.0) * 15.0)
+        if pd.notna(var_1j) and var_1j > 0.5:
+            vol_pts *= 0.3
+        score += vol_pts
+
+    # Retournement MACD naissant (0-10 pts)
+    if pd.notna(macd_hist_prev) and pd.notna(macd_hist_last) and macd_hist_prev <= 0 and macd_hist_last > 0:
+        score += 10.0
+
+    # Proximité du plus bas sur la période (0-10 pts) : rampe continue.
+    if pd.notna(pct_from_low):
+        score += max(0.0, 10.0 - pct_from_low / 2.0)
+
+    return int(round(min(max(score, 0.0), 100.0)))
 
 # ══════════════════════════════════════════════════════════════════════════
 # 4. PIPELINE DE RÉCUPÉRATION & D'ANALYSE
@@ -652,16 +665,24 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
         data = yf.download(symbols, period="1y", interval="1d", group_by="ticker",
                             auto_adjust=True, threads=True, progress=False)
     except Exception as e:  # réseau, rate-limit, etc.
-        return pd.DataFrame(), f"{e}"
+        return pd.DataFrame(), f"{e}", []
 
     if data is None or data.empty:
-        return pd.DataFrame(), "Aucune donnée reçue (tickers invalides ou délistés, limite de requêtes Yahoo Finance, ou accès réseau restreint)."
+        return pd.DataFrame(), "Aucune donnée reçue (tickers invalides ou délistés, limite de requêtes Yahoo Finance, ou accès réseau restreint).", []
 
     rows = []
+    skipped = []  # (symbol, raison) : rendu visible dans l'UI plutôt que silencieusement perdu
     for symbol in symbols:
         try:
             df_s = _extract_frame(data, symbol, n)
-            if len(df_s) < 30 or "Close" not in df_s.columns:
+            if len(df_s) == 0:
+                skipped.append((symbol, "aucune donnée renvoyée par Yahoo Finance"))
+                continue
+            if "Close" not in df_s.columns:
+                skipped.append((symbol, "données incomplètes (colonne Close absente)"))
+                continue
+            if len(df_s) < 30:
+                skipped.append((symbol, f"historique trop court ({len(df_s)} séances, 30 minimum)"))
                 continue
 
             close = df_s["Close"]
@@ -672,6 +693,7 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
             ind = compute_indicators(df_s)
             rsi = ind["rsi"].iloc[-1]
             boll_low = ind["boll_low"].iloc[-1]
+            boll_mid = ind["sma20"].iloc[-1]
             vol_ratio = ind["vol_ratio"].iloc[-1]
             macd_hist = ind["macd_hist"]
             macd_prev = macd_hist.iloc[-2] if len(macd_hist) >= 2 else np.nan
@@ -680,7 +702,8 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
             period_low = float(close.min())
             pct_from_low = (last_p - period_low) / period_low * 100 if period_low else np.nan
 
-            score = compute_score(rsi, last_p, boll_low, vol_ratio, macd_prev, macd_last, pct_from_low)
+            score = compute_score(rsi, last_p, boll_low, boll_mid, vol_ratio, macd_prev, macd_last,
+                                   pct_from_low, var_day, var_5d)
 
             rows.append({
                 "Ticker": symbol,
@@ -697,14 +720,14 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
                 "Score Opp.": score,
                 "_history": df_s,
             })
-        except Exception:
+        except Exception as e:
+            skipped.append((symbol, f"erreur inattendue : {e}"))
             continue
 
-    return pd.DataFrame(rows), None
-
+    return pd.DataFrame(rows), None, skipped
 
 # ══════════════════════════════════════════════════════════════════════════
-# 4B. CARTES D'OPPORTUNITE & JAUGE DE SCORE (SVG)
+# 4B. CARTES D'OPPORTUNITE & JAUGE DE SCORE
 # ══════════════════════════════════════════════════════════════════════════
 
 def render_gauge_svg(score: int) -> str:
@@ -738,7 +761,6 @@ def render_gauge_svg(score: int) -> str:
         '<text x="100" y="104" text-anchor="middle" class="gauge-suffix">/ 100</text>'
         '</svg></div>'
     )
-
 
 def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> None:
     """Affiche le contenu d'une carte d'opportunité (texte + jauge). À
@@ -783,7 +805,6 @@ def infer_currency(ticker: str) -> str:
         return "NT$"
     return "$"
 
-
 # ══════════════════════════════════════════════════════════════════════════
 # 4C. NOMS ET SECTEURS COURTS (jamais tronqués mid-mot dans les tableaux)
 # ══════════════════════════════════════════════════════════════════════════
@@ -805,7 +826,6 @@ _NAME_OVERRIDES = {
     "sea limited (adr)": "Sea Limited",
     "pdd holdings (adr)": "PDD Holdings",
 }
-
 
 def shorten_name(name: str, max_len: int = 24) -> str:
     """Nom court et compréhensible plutôt que tronqué au milieu par
@@ -831,7 +851,6 @@ def shorten_name(name: str, max_len: int = 24) -> str:
         n = short
     return n.strip() or str(name).strip()
 
-
 _SECTOR_SHORT = {
     "consommation": "Conso",
     "information technology": "Tech. Info.",
@@ -852,7 +871,6 @@ _SECTOR_SHORT = {
     "tech / investissement": "Tech / Invest.",
 }
 
-
 def shorten_sector(sector: str, max_len: int = 18) -> str:
     s = str(sector).strip()
     if not s:
@@ -870,9 +888,8 @@ def shorten_sector(sector: str, max_len: int = 18) -> str:
         return short.strip()
     return s
 
-
 # ══════════════════════════════════════════════════════════════════════════
-# 4D. RECHERCHE LIBRE, TOUS MARCHÉS (résolution nom -> ticker)
+# 4D. RECHERCHE LIBRE, TOUS LES MARCHÉS
 # ══════════════════════════════════════════════════════════════════════════
 
 def _norm(s: str) -> str:
@@ -948,9 +965,7 @@ def _build_aliases() -> dict:
             continue
     return {k: v for k, v in aliases.items() if k}
 
-
 ALIASES = _build_aliases()
-
 
 def resolve_query_to_ticker(query: str, universe_df: pd.DataFrame, results_df: pd.DataFrame):
     """Résout une saisie libre (ticker ou nom d'entreprise) en un ticker
@@ -1000,17 +1015,15 @@ def resolve_query_to_ticker(query: str, universe_df: pd.DataFrame, results_df: p
 
     return None, None
 
-
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_single_ticker(ticker: str, display_name: str):
     """Récupère et analyse un seul ticker, indépendamment du marché
     sélectionné dans la barre latérale. Réutilise le même pipeline
     d'indicateurs/scoring que l'analyse principale."""
-    df_result, err = fetch_and_analyze("search", [ticker], {ticker: display_name}, {ticker: "Recherche"})
+    df_result, err, _skipped = fetch_and_analyze("search", [ticker], {ticker: display_name}, {ticker: "Recherche"})
     if err or df_result.empty:
         return None
     return df_result.iloc[0]
-
 
 # ══════════════════════════════════════════════════════════════════════════
 # 5. SIDEBAR : SELECTION DU MARCHE ET FILTRES
@@ -1051,26 +1064,28 @@ PRESETS = {
     "Agressif": {"score": 25, "rsi": 45},
 }
 
-
 def _apply_preset():
     p = PRESETS.get(st.session_state.get("preset_choice"))
     if p:
         st.session_state["min_score"] = p["score"]
         st.session_state["rsi_max"] = p["rsi"]
 
+def _mark_custom():
+    st.session_state["preset_choice"] = "Personnalisé"
 
 st.session_state.setdefault("min_score", 40)
 st.session_state.setdefault("rsi_max", 35)
+st.session_state.setdefault("preset_choice", "Modéré")
 st.sidebar.radio(
     "Profil de risque", list(PRESETS.keys()) + ["Personnalisé"],
-    key="preset_choice", on_change=_apply_preset, index=1,
+    key="preset_choice", on_change=_apply_preset,
 )
 
 with st.sidebar.expander("Critères de sélection", expanded=True):
     group_options = ["Tous"] + sorted({shorten_sector(g) for g in universe_df["Groupe"].dropna()}) if len(universe_df) else ["Tous"]
     selected_group = st.selectbox(market.group_label, group_options)
-    min_score = st.slider("Score Opportunité Min.", 0, 100, step=5, key="min_score")
-    rsi_max = st.slider("RSI Max (zone de survente)", 10, 50, key="rsi_max")
+    min_score = st.slider("Score Opportunité Min.", 0, 100, step=5, key="min_score", on_change=_mark_custom)
+    rsi_max = st.slider("RSI Max (zone de survente)", 10, 50, key="rsi_max", on_change=_mark_custom)
     st.caption(
         "Score et RSI sont deux filtres indépendants (ET logique) : baisser le score minimum "
         "n'affiche rien tant que le RSI dépasse ce seuil. Si un marché reste vide, montez ce curseur."
@@ -1107,7 +1122,7 @@ names_map = dict(zip(symbols, universe_df["Nom"]))
 groups_map = dict(zip(symbols, universe_df["Groupe"]))
 
 with st.spinner(f"Analyse de {len(symbols)} titres : {market.label}..."):
-    results_df, fetch_error = fetch_and_analyze(market.key, symbols, names_map, groups_map)
+    results_df, fetch_error, skipped_symbols = fetch_and_analyze(market.key, symbols, names_map, groups_map)
 
 if fetch_error:
     st.error(f"Erreur lors de la récupération des données : {fetch_error}")
@@ -1115,6 +1130,10 @@ if fetch_error:
 if results_df.empty:
     st.warning("Aucune donnée exploitable n'a pu être calculée pour cet univers. Réessayez ou changez de marché.")
     st.stop()
+if skipped_symbols:
+    with st.expander(f"{len(skipped_symbols)} titre(s) ignoré(s) sur {len(symbols)} (données indisponibles)"):
+        for sym, reason in skipped_symbols:
+            st.markdown(f"- **{sym}** : {reason}")
 
 # ══════════════════════════════════════════════════════════════════════════
 # 7. FILTRAGE
@@ -1407,21 +1426,22 @@ with tab_about:
         st.markdown('<div class="panel-title">Comment le score d\'opportunité est calculé</div>', unsafe_allow_html=True)
         st.markdown(
             """
-            | Signal | Condition | Points |
+            | Signal | Logique | Points max |
             |---|---|---|
-            | RSI (14) | < 30 (survente forte) | +30 |
-            | RSI (14) | entre 30 et 40 (survente modérée) | +15 |
-            | Bandes de Bollinger | prix ≤ bande basse (20j, 2σ) | +20 |
-            | Volume | ratio vs moyenne 20j > 1.5x | +20 |
-            | Volume | ratio vs moyenne 20j entre 1.2x et 1.5x | +10 |
-            | MACD | croisement haussier naissant de l'histogramme | +15 |
-            | Range période | prix à ≤ 10% du plus bas sur 1 an | +15 |
-            | Range période | prix à ≤ 20% du plus bas sur 1 an | +8 |
+            | RSI (14) | rampe continue : 25 pts à RSI ≤ 15, 0 pt à RSI ≥ 50 | 25 |
+            | Bandes de Bollinger | proportionnel à la profondeur sous la bande basse (20j, 2σ) | 20 |
+            | Momentum récent | variation 1J et 5J : plus la baisse récente est marquée, plus le score est élevé ; un rebond récent n'ajoute rien | 20 |
+            | Volume | ratio vs moyenne 20j, réduit de 70% si la séance est en forte hausse (un volume élevé en hausse n'est pas un signal d'opportunité) | 15 |
+            | MACD | croisement haussier naissant de l'histogramme | 10 |
+            | Range période | rampe continue selon la proximité du plus bas sur 1 an | 10 |
             """
         )
         st.caption(
-            "Le score est plafonné à 100. Il combine des signaux de survente, de retournement "
-            "et d'anomalie de volume : il ne constitue en aucun cas une garantie de rebond futur."
+            "Le score est plafonné à 100. Les composantes RSI, Bollinger et Range évoluent en continu "
+            "(pas de palier brutal), et le momentum récent est explicitement pris en compte : un titre "
+            "qui rebondit fortement voit son score baisser même si RSI/Bollinger n'ont pas encore rattrapé "
+            "ce rebond. Le score combine des signaux de survente et de retournement : il ne constitue en "
+            "aucun cas une garantie de rebond futur."
         )
 
     st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
@@ -1434,12 +1454,9 @@ with tab_about:
 st.markdown(
     """
     <div class="disclaimer">
-    Les résultats fournis par cette application reposent sur des indicateurs techniques
-    (RSI, Bandes de Bollinger, MACD, ratio de volume) et sont présentés à titre purement informatif
-    et pédagogique. Ils ne constituent en aucun cas un conseil en investissement, une recommandation
-    d'achat ou de vente, ni une garantie de résultat. Les marchés actions et cryptomonnaies comportent
-    des risques significatifs, y compris la perte totale du capital investi. Les calculs peuvent
-    contenir des approximations ou retards inhérents aux données (Yahoo Finance, Wikipedia).
+    Les résultats fournis par cette application reposent sur des indicateurs techniques (RSI, Bandes de Bollinger, MACD, ratio de volume) et sont présentés à titre purement informatif et pédagogique. 
+    Ils ne constituent en aucun cas un conseil en investissement, une recommandation d'achat ou de vente, ni une garantie de résultat. Les marchés actions et cryptomonnaies comportent des risques significatifs, 
+    y compris la perte totale du capital investi. Les calculs peuvent contenir des approximations ou retards inhérents aux données (Yahoo Finance, Wikipedia). 
     Consultez un professionnel agréé avant toute décision d'investissement.
     </div>
     """,
