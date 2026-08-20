@@ -100,7 +100,7 @@ def render_hero_icon_svg(size: int = 40) -> str:
 
 
 st.set_page_config(
-    page_title="Pro Screener, Multi-Marches",
+    page_title="Pro Screener, Multi-Marchés",
     page_icon=_build_favicon(),
     layout="wide",
     initial_sidebar_state="expanded",
@@ -205,13 +205,6 @@ def inject_style() -> None:
                      white-space:normal; word-break:break-word; line-height:1.2; }
 
         /* ---------- Survol dégradé rouge -> orange, réutilisé sur les cases importantes ---------- */
-        [data-testid="stVerticalBlockBorderWrapper"]:has(.opp-card){
-            transition:box-shadow .18s ease, border-color .18s ease, transform .18s ease;
-        }
-        [data-testid="stVerticalBlockBorderWrapper"]:has(.opp-card):hover{
-            border-color:transparent !important; transform:translateY(-2px);
-            box-shadow:0 0 0 1.5px #F0466E, 0 0 0 1.5px #F5A623 inset, 0 14px 32px -12px rgba(240,70,110,.55) !important;
-        }
         div[data-testid="stButton"] > button, div[data-testid="stDownloadButton"] > button,
         div[data-testid="stFormSubmitButton"] > button{
             transition:box-shadow .18s ease, border-color .18s ease, color .18s ease;
@@ -222,12 +215,17 @@ def inject_style() -> None:
             box-shadow:0 0 0 1.5px #F0466E, 0 0 0 1.5px #F5A623 inset, 0 8px 20px -10px rgba(240,70,110,.5) !important;
         }
 
-        /* ---------- Spotlight cards ---------- */
-        .opp-card{ padding:2px 2px 4px 2px; }
+        /* ---------- Spotlight cards : bloc HTML auto-porté (bordure/fond/hover intégrés),
+           plus fiable qu'un ciblage CSS du conteneur Streamlit englobant. ---------- */
+        .opp-card-shell{ background:var(--bg-card); border:1px solid var(--border); border-radius:16px;
+                    padding:16px 18px 18px 18px; transition:box-shadow .18s ease, border-color .18s ease,
+                    transform .18s ease; cursor:default; }
+        .opp-card-shell:hover{ border-color:transparent; transform:translateY(-2px);
+                    box-shadow:0 0 0 1.5px #F0466E, 0 0 0 1.5px #F5A623 inset, 0 14px 32px -12px rgba(240,70,110,.55); }
         .opp-rank{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-lo); text-transform:uppercase; letter-spacing:.08em; }
-        .opp-name{ font-family:'Space Grotesk',sans-serif; font-size:1.35rem; font-weight:700; color:var(--text-hi); margin:2px 0 0 0; line-height:1.2; }
+        .opp-name{ font-family:'Space Grotesk',sans-serif; font-size:1.2rem; font-weight:700; color:var(--text-hi); margin:2px 0 0 0; line-height:1.25; }
         .opp-ticker{ font-family:'IBM Plex Mono',monospace; font-size:.8rem; color:var(--text-lo); letter-spacing:.03em; margin-bottom:10px; }
-        .opp-price{ font-family:'IBM Plex Mono',monospace; font-size:1.05rem; color:var(--text-hi); }
+        .opp-price{ font-family:'IBM Plex Mono',monospace; font-size:1.55rem; font-weight:700; color:var(--text-hi); margin-bottom:10px; }
 
         /* ---------- Panneaux (graphiques / tableaux) ---------- */
         .panel-title{ font-family:'Space Grotesk',sans-serif; font-size:1.05rem; font-weight:700;
@@ -302,23 +300,49 @@ def _flatten_cols(df: pd.DataFrame) -> list[str]:
     return flat
 
 
+def _looks_unnamed(cols: list[str]) -> bool:
+    unnamed = sum(1 for c in cols if c.lower().startswith("unnamed"))
+    return unnamed >= max(1, len(cols) // 2)
+
+
+def _repair_header(t: pd.DataFrame) -> pd.DataFrame:
+    """Si les colonnes ressemblent à des noms auto-générés par pandas
+    ('Unnamed: 0', 'Unnamed: 1'...), Wikipedia a probablement un en-tête
+    étalé sur plusieurs lignes que pandas n'a pas su fusionner correctement :
+    on promeut la première ligne de données en en-tête et on retente."""
+    if len(t) > 1 and _looks_unnamed(_flatten_cols(t)):
+        repaired = t.iloc[1:].copy()
+        repaired.columns = [str(c) for c in t.iloc[0]]
+        return repaired
+    return t
+
+
 def _best_wiki_table(url: str, ticker_keys: list[str], name_keys: list[str]) -> pd.DataFrame:
     """Récupère la page Wikipedia et retourne la table de composants la plus
     probable : parmi toutes les tables contenant à la fois une colonne
     'ticker-like' et une colonne 'nom-like', on garde la plus grande (le
     nombre de lignes), pour éviter qu'une petite table annexe (ex :
     'changements récents') ne soit choisie par erreur. Robuste aussi aux
-    en-têtes multi-lignes (MultiIndex) que Wikipedia introduit parfois."""
+    en-têtes multi-lignes (MultiIndex, ou en-têtes que pandas ne détecte pas
+    du tout et remplace par des noms 'Unnamed: N')."""
     resp = requests.get(url, headers=HEADERS, timeout=15)
     resp.raise_for_status()
-    tables = pd.read_html(io.StringIO(resp.text))
+    try:
+        tables = pd.read_html(io.StringIO(resp.text), attrs={"class": "wikitable"})
+    except ValueError:
+        tables = []
+    if not tables:
+        tables = pd.read_html(io.StringIO(resp.text))
+
     candidates = []
     for t in tables:
-        cols = [c.lower() for c in _flatten_cols(t)]
-        has_ticker = any(any(k in c for k in ticker_keys) for c in cols)
-        has_name = any(any(k in c for k in name_keys) for c in cols)
-        if has_ticker and has_name and len(t) >= 5:
-            candidates.append(t)
+        for candidate in (t, _repair_header(t)):
+            cols = [c.lower() for c in _flatten_cols(candidate)]
+            has_ticker = any(any(k in c for k in ticker_keys) for c in cols)
+            has_name = any(any(k in c for k in name_keys) for c in cols)
+            if has_ticker and has_name and len(candidate) >= 5:
+                candidates.append(candidate)
+                break
     if not candidates:
         raise ValueError(
             f"table des composants introuvable sur la page Wikipedia ({len(tables)} table(s) "
@@ -492,7 +516,11 @@ def load_sx5e_leaders() -> pd.DataFrame:
 def load_kospi_leaders() -> pd.DataFrame:
     """Sélection maison des plus grandes capitalisations cotées au KOSPI.
     Non exhaustive : Wikipedia ne publie pas de tableau complet et fiable des
-    ~800 composants du KOSPI, contrairement au Nikkei 225 ou au Hang Seng."""
+    ~800 composants du KOSPI, contrairement au Nikkei 225 ou au Hang Seng.
+    Confiance moindre que les autres listes maison sur les tickers les plus
+    récents (scissions/holdings type SK Square, HD Hyundai) : si l'un d'eux
+    est ignoré au chargement (panneau "titres ignorés"), le ticker a
+    probablement changé depuis, à vérifier sur Yahoo Finance."""
     data = [
         ("005930.KS", "Samsung Electronics", "Semi-conducteurs / Electronique"),
         ("000660.KS", "SK Hynix", "Semi-conducteurs"),
@@ -508,6 +536,22 @@ def load_kospi_leaders() -> pd.DataFrame:
         ("068270.KS", "Celltrion", "Santé / Biotech"),
         ("105560.KS", "KB Financial Group", "Finance"),
         ("055550.KS", "Shinhan Financial Group", "Finance"),
+        ("028260.KS", "Samsung C&T", "Conglomérat"),
+        ("032830.KS", "Samsung Life Insurance", "Assurance"),
+        ("012330.KS", "Hyundai Mobis", "Automobile / Equipementier"),
+        ("096770.KS", "SK Innovation", "Energie"),
+        ("017670.KS", "SK Telecom", "Télécoms"),
+        ("030200.KS", "KT Corp", "Télécoms"),
+        ("086790.KS", "Hana Financial Group", "Finance"),
+        ("015760.KS", "Korea Electric Power (KEPCO)", "Energie / Utilities"),
+        ("066570.KS", "LG Electronics", "Electronique grand public"),
+        ("003550.KS", "LG Corp (holding)", "Conglomérat"),
+        ("090430.KS", "Amorepacific", "Cosmétiques"),
+        ("010130.KS", "Korea Zinc", "Mines / Métaux"),
+        ("021240.KS", "Coway", "Biens de consommation"),
+        ("034220.KS", "LG Display", "Electronique / Ecrans"),
+        ("316140.KS", "Woori Financial Group", "Finance"),
+        ("352820.KS", "Hybe", "Divertissement / K-pop"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
@@ -609,7 +653,7 @@ def load_priority_watchlist() -> pd.DataFrame:
         ("RR.L", "Rolls Royce", "Aéronautique / Défense"),
         # Energie / uranium / défense nucléaire
         ("TTE.PA", "TotalEnergies", "Energie"), ("CCJ", "Cameco", "Uranium"),
-        ("KAP.L", "Kazatomprom (GDR, premier producteur d'uranium)", "Uranium"), ("BWXT", "BWX Technologies (composants nucléaires)", "Nucléaire / Défense"),
+        ("BWXT", "BWX Technologies (composants nucléaires)", "Nucléaire / Défense"),
         # Mines d'or
         ("NEM", "Newmont", "Mines d'or"), ("AEM", "Agnico Eagle Mines", "Mines d'or"),
         ("GOLD", "Barrick Mining (anciennement Barrick Gold)", "Mines d'or"), ("KGC", "Kinross Gold", "Mines d'or"),
@@ -656,7 +700,8 @@ MARKETS: dict[str, MarketConfig] = {
     "hangseng": MarketConfig("hangseng", "Hang Seng (Hong Kong)", load_hangseng, ".HK", "HK$", "Secteur"),
     "kospi": MarketConfig(
         "kospi", "Kospi, grandes capitalisations (Corée)", load_kospi_leaders, "", "₩", "Secteur", is_curated=True,
-        note="Sélection maison des plus grandes valeurs du KOSPI, liste non exhaustive.",
+        note="Sélection maison d'une trentaine de grandes valeurs, PAS un indice officiel : le KOSPI "
+             "compte environ 800 sociétés cotées au total, cette liste n'en couvre qu'une petite partie.",
     ),
     "asia_tech": MarketConfig(
         "asia_tech", "Asie, leaders tech", load_asia_tech_leaders, "", "$", "Pays / Thématique", is_curated=True,
@@ -904,8 +949,9 @@ def render_gauge_svg(score: int) -> str:
 
 
 def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> None:
-    """Affiche le contenu d'une carte d'opportunité (texte + jauge). À
-    appeler à l'intérieur d'un `st.container(border=True)`."""
+    """Affiche une carte d'opportunité complète (texte + jauge) comme un seul
+    bloc HTML auto-porté (bordure/fond/survol inclus) : à appeler directement
+    dans une colonne, sans `st.container(border=True)` autour."""
     var_cls = "badge-buy" if row["Var. 1J (%)"] >= 0 else "badge-down"
     badges = f'<span class="badge {var_cls}">Var 1J {row["Var. 1J (%)"]:+.2f}%</span>'
     if row["Sous Bollinger"]:
@@ -918,19 +964,18 @@ def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> N
     if pe is not None:
         badges += f'<span class="badge badge-neutral">P/E {pe}</span>'
 
+    gauge_svg = render_gauge_svg(int(row["Score Opp."]))
     st.markdown(
-        f"""
-        <div class="opp-card">
-          <div class="opp-rank">{rank_label}</div>
-          <div class="opp-name">{row['Nom']}</div>
-          <div class="opp-ticker">{row['Ticker']}</div>
-          <div class="opp-price">{currency}{row['Prix']:.2f}</div>
-          <div>{badges}</div>
-        </div>
-        """,
+        f'<div class="opp-card-shell">'
+        f'<div class="opp-rank">{rank_label}</div>'
+        f'<div class="opp-name">{row["Nom"]}</div>'
+        f'<div class="opp-ticker">{row["Ticker"]}</div>'
+        f'<div class="opp-price">{currency}{row["Prix"]:.2f}</div>'
+        f'<div>{badges}</div>'
+        f'{gauge_svg}'
+        f'</div>',
         unsafe_allow_html=True,
     )
-    st.markdown(render_gauge_svg(int(row["Score Opp."])), unsafe_allow_html=True)
 
 
 def infer_currency(ticker: str) -> str:
@@ -1478,7 +1523,7 @@ if len(filtered) > 0:
     top3 = filtered.head(3)
     cols = st.columns(len(top3))
     for i, (col, (_, row)) in enumerate(zip(cols, top3.iterrows())):
-        with col, st.container(border=True):
+        with col:
             render_opportunity_card(row, row["Devise"], f"Opportunité n°{i + 1}")
 
 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
@@ -1518,7 +1563,7 @@ if search_clicked and free_query.strip():
             )
         else:
             search_col = st.columns([1, 1, 1])[0]
-            with search_col, st.container(border=True):
+            with search_col:
                 render_opportunity_card(search_row, infer_currency(resolved_ticker), "Résultat de recherche")
 
 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
