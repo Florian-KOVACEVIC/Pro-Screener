@@ -1,6 +1,6 @@
 """
 ================================================================================
- PRO SCREENER : Opportunites Court Terme et Rebond (Multi-Marches)
+ PRO SCREENER : Opportunités Court Terme et Rebond (Multi-Marchés)
 ================================================================================
 Application Streamlit pour détecter des actions/cryptos en survente présentant
 un volume anormal et des signaux techniques de rebond, sur n'importe quel
@@ -196,10 +196,31 @@ def inject_style() -> None:
         /* ---------- Grille de KPI (responsive : passe à la ligne si l'écran est étroit) ---------- */
         .kpi-grid{ display:flex; flex-wrap:wrap; gap:12px; margin:4px 0 8px 0; }
         .kpi-card{ flex:1 1 170px; min-width:150px; background:var(--bg-card); border:1px solid var(--border);
-                    border-radius:14px; padding:14px 18px; }
+                    border-radius:14px; padding:14px 18px; transition:box-shadow .18s ease, border-color .18s ease,
+                    transform .18s ease; cursor:default; }
+        .kpi-card:hover{ border-color:transparent; transform:translateY(-1px);
+                    box-shadow:0 0 0 1.5px #F0466E, 0 0 0 1.5px #F5A623 inset, 0 10px 26px -10px rgba(240,70,110,.5); }
         .kpi-label{ color:var(--text-lo); font-size:.8rem; margin-bottom:6px; white-space:normal; }
         .kpi-value{ font-family:'IBM Plex Mono',monospace; color:var(--text-hi); font-size:1.35rem; font-weight:700;
                      white-space:normal; word-break:break-word; line-height:1.2; }
+
+        /* ---------- Survol dégradé rouge -> orange, réutilisé sur les cases importantes ---------- */
+        [data-testid="stVerticalBlockBorderWrapper"]:has(.opp-card){
+            transition:box-shadow .18s ease, border-color .18s ease, transform .18s ease;
+        }
+        [data-testid="stVerticalBlockBorderWrapper"]:has(.opp-card):hover{
+            border-color:transparent !important; transform:translateY(-2px);
+            box-shadow:0 0 0 1.5px #F0466E, 0 0 0 1.5px #F5A623 inset, 0 14px 32px -12px rgba(240,70,110,.55) !important;
+        }
+        div[data-testid="stButton"] > button, div[data-testid="stDownloadButton"] > button,
+        div[data-testid="stFormSubmitButton"] > button{
+            transition:box-shadow .18s ease, border-color .18s ease, color .18s ease;
+        }
+        div[data-testid="stButton"] > button:hover, div[data-testid="stDownloadButton"] > button:hover,
+        div[data-testid="stFormSubmitButton"] > button:hover{
+            border-color:transparent !important; color:var(--text-hi) !important;
+            box-shadow:0 0 0 1.5px #F0466E, 0 0 0 1.5px #F5A623 inset, 0 8px 20px -10px rgba(240,70,110,.5) !important;
+        }
 
         /* ---------- Spotlight cards ---------- */
         .opp-card{ padding:2px 2px 4px 2px; }
@@ -268,21 +289,42 @@ class MarketConfig:
     note: str = ""
 
 
+def _flatten_cols(df: pd.DataFrame) -> list[str]:
+    """Aplati les colonnes (gère le cas où Wikipedia ajoute une ligne d'en-tête
+    supplémentaire, ce qui fait lire les colonnes comme un MultiIndex par
+    pandas.read_html au lieu de simples chaînes)."""
+    flat = []
+    for c in df.columns:
+        if isinstance(c, tuple):
+            flat.append(" ".join(str(p) for p in c if str(p) != "nan"))
+        else:
+            flat.append(str(c))
+    return flat
+
+
 def _best_wiki_table(url: str, ticker_keys: list[str], name_keys: list[str]) -> pd.DataFrame:
-    """Récupère la page Wikipedia et retourne la première table qui contient
-    à la fois une colonne 'ticker-like' et une colonne 'nom-like'. Robuste
-    aux changements de mise en page (les tables de composants ne sont pas
-    toujours à l'index 0)."""
+    """Récupère la page Wikipedia et retourne la table de composants la plus
+    probable : parmi toutes les tables contenant à la fois une colonne
+    'ticker-like' et une colonne 'nom-like', on garde la plus grande (le
+    nombre de lignes), pour éviter qu'une petite table annexe (ex :
+    'changements récents') ne soit choisie par erreur. Robuste aussi aux
+    en-têtes multi-lignes (MultiIndex) que Wikipedia introduit parfois."""
     resp = requests.get(url, headers=HEADERS, timeout=15)
     resp.raise_for_status()
     tables = pd.read_html(io.StringIO(resp.text))
+    candidates = []
     for t in tables:
-        cols = [str(c).lower() for c in t.columns]
+        cols = [c.lower() for c in _flatten_cols(t)]
         has_ticker = any(any(k in c for k in ticker_keys) for c in cols)
         has_name = any(any(k in c for k in name_keys) for c in cols)
-        if has_ticker and has_name:
-            return t
-    raise ValueError("table des composants introuvable sur la page Wikipedia")
+        if has_ticker and has_name and len(t) >= 5:
+            candidates.append(t)
+    if not candidates:
+        raise ValueError(
+            f"table des composants introuvable sur la page Wikipedia ({len(tables)} table(s) "
+            "analysée(s), aucune ne correspond aux colonnes attendues)."
+        )
+    return max(candidates, key=len)
 
 
 def _col(df: pd.DataFrame, keys: list[str]) -> Optional[str]:
@@ -337,14 +379,14 @@ def load_sp500() -> pd.DataFrame:
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_nasdaq100() -> pd.DataFrame:
-    t = _best_wiki_table("https://en.wikipedia.org/wiki/Nasdaq-100", ["ticker", "symbol"], ["company"])
-    return _standardize(t, ["ticker", "symbol"], ["company"], ["gics sector", "sector"])
+    t = _best_wiki_table("https://en.wikipedia.org/wiki/Nasdaq-100", ["ticker", "symbol"], ["company", "name", "constituent"])
+    return _standardize(t, ["ticker", "symbol"], ["company", "name", "constituent"], ["gics sector", "sector"])
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_dow30() -> pd.DataFrame:
-    t = _best_wiki_table("https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average", ["symbol"], ["company"])
-    return _standardize(t, ["symbol"], ["company"], ["industry"])
+    t = _best_wiki_table("https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average", ["symbol", "ticker"], ["company", "name"])
+    return _standardize(t, ["symbol", "ticker"], ["company", "name"], ["industry"])
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
@@ -527,6 +569,69 @@ def load_crypto_top() -> pd.DataFrame:
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
 
+def load_priority_watchlist() -> pd.DataFrame:
+    """Marché cible personnalisé de l'utilisateur : chaîne de valeur semi-conducteurs,
+    IA, luxe, énergie/uranium, mines d'or, pharma/biotech, financières/bourses.
+    Multi-devises (voir infer_currency, appliqué par titre)."""
+    data = [
+        # Sept Magnifiques
+        ("AAPL", "Apple", "Tech"), ("MSFT", "Microsoft", "Tech"), ("GOOGL", "Alphabet", "Tech"),
+        ("AMZN", "Amazon", "Tech"), ("NVDA", "Nvidia", "Semi-conducteurs"), ("META", "Meta Platforms", "Tech"),
+        ("TSLA", "Tesla", "Automobile / Energie"),
+        # Semi-conducteurs, chaîne de valeur complète
+        ("AMD", "AMD", "Semi-conducteurs"), ("INTC", "Intel", "Semi-conducteurs"),
+        ("MU", "Micron", "Semi-conducteurs"), ("TSM", "Taiwan Semiconductor (ADR)", "Semi-conducteurs"),
+        ("2454.TW", "MediaTek", "Semi-conducteurs"), ("ASX", "ASE Technology (ADR)", "Semi-conducteurs"),
+        ("STM", "STMicroelectronics (ADR)", "Semi-conducteurs"),
+        ("2317.TW", "Hon Hai Precision (Foxconn)", "Electronique"),
+        ("2308.TW", "Delta Electronics", "Electronique"), ("3231.TW", "Wistron", "Electronique"),
+        ("BESI.AS", "BE Semiconductor / Besi (équipement)", "Semi-conducteurs"), ("AVGO", "Broadcom", "Semi-conducteurs"),
+        ("000660.KS", "SK Hynix", "Semi-conducteurs"), ("005930.KS", "Samsung Electronics", "Semi-conducteurs"),
+        ("SOI.PA", "Soitec (semi-conducteurs, wafers)", "Semi-conducteurs"),
+        ("ASML", "ASML Holding (équipement lithographie)", "Equipements semi-conducteurs"),
+        ("AMAT", "Applied Materials", "Equipements semi-conducteurs"),
+        ("LRCX", "Lam Research", "Equipements semi-conducteurs"),
+        ("KLAC", "KLA Corp", "Equipements semi-conducteurs"),
+        # IA / logiciel / data
+        ("BIDU", "Baidu (ADR)", "IA / Internet"), ("WK", "Workiva", "Logiciel"),
+        ("SOUN", "SoundHound AI", "IA"), ("PLTR", "Palantir", "IA / Logiciel"),
+        # Electronique / optique / matériel
+        ("2CRSI.PA", "2CRSI (serveurs IA / datacenter)", "Serveurs / Datacenter"), ("SONY", "Sony Group (ADR)", "Electronique"),
+        ("LITE", "Lumentum Holdings", "Optique / Composants"), ("AMBA", "Ambarella", "Semi-conducteurs"),
+        ("DELL", "Dell Technologies", "Matériel informatique"),
+        # Luxe / conso France
+        ("KER.PA", "Kering", "Luxe"), ("MC.PA", "LVMH", "Luxe"), ("RMS.PA", "Hermès", "Luxe"),
+        ("CAP.PA", "Capgemini", "Services IT"), ("ORA.PA", "Orange", "Télécoms"),
+        # Auto / industrie
+        ("STLA", "Stellantis", "Automobile"), ("BYDDY", "BYD (ADR)", "Automobile"),
+        ("TM", "Toyota Motors (ADR)", "Automobile"), ("005380.KS", "Hyundai Motor", "Automobile"),
+        ("6273.T", "SMC Corp", "Automatisation / Robotique"), ("EMR", "Emerson Electric", "Industrie"),
+        ("RR.L", "Rolls Royce", "Aéronautique / Défense"),
+        # Energie / uranium / défense nucléaire
+        ("TTE.PA", "TotalEnergies", "Energie"), ("CCJ", "Cameco", "Uranium"),
+        ("KAP.L", "Kazatomprom (GDR, premier producteur d'uranium)", "Uranium"), ("BWXT", "BWX Technologies (composants nucléaires)", "Nucléaire / Défense"),
+        # Mines d'or
+        ("NEM", "Newmont", "Mines d'or"), ("AEM", "Agnico Eagle Mines", "Mines d'or"),
+        ("GOLD", "Barrick Mining (anciennement Barrick Gold)", "Mines d'or"), ("KGC", "Kinross Gold", "Mines d'or"),
+        ("6181.HK", "Laopu Gold", "Bijouterie / Or"),
+        # Pharma / biotech
+        ("207940.KS", "Samsung Biologics", "Biotech"), ("SAN.PA", "Sanofi", "Pharma"),
+        ("NVO", "Novo Nordisk (ADR)", "Pharma"), ("LLY", "Eli Lilly", "Pharma"),
+        ("IPN.PA", "Ipsen (biopharma)", "Pharma"), ("GNFT.PA", "Genfit (biotech, maladies du foie)", "Biotech"), ("NANO.PA", "Nanobiotix (biotech, oncologie)", "Biotech"),
+        # Financières / bourses
+        ("JPM", "JPMorgan Chase", "Banque"), ("GS", "Goldman Sachs", "Banque"),
+        ("MS", "Morgan Stanley", "Banque"), ("MSCI", "MSCI (indices boursiers, données financières)", "Indices / Data financière"),
+        ("ENX.PA", "Euronext (opérateur boursier)", "Bourse"), ("LSEG.L", "LSE Group (opérateur boursier de Londres)", "Bourse"),
+        ("G.MI", "Generali (assurance italienne)", "Assurance"), ("ALV.DE", "Allianz (assurance allemande)", "Assurance"),
+        ("BLK", "BlackRock", "Gestion d'actifs"), ("MUFG", "Mitsubishi UFJ Financial (ADR)", "Banque"),
+        ("V", "Visa", "Paiements"), ("MA", "Mastercard", "Paiements"),
+        # Chine
+        ("0700.HK", "Tencent Holdings", "Internet / Gaming"), ("BABA", "Alibaba (ADR)", "E-commerce / Cloud"),
+        ("300750.SZ", "CATL", "Batteries"),
+    ]
+    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
+
 MARKETS: dict[str, MarketConfig] = {
     "sp500": MarketConfig("sp500", "S&P 500 (États-Unis)", load_sp500, "", "$", "Secteur GICS"),
     "nasdaq100": MarketConfig("nasdaq100", "Nasdaq 100 (États-Unis)", load_nasdaq100, "", "$", "Secteur GICS"),
@@ -560,6 +665,11 @@ MARKETS: dict[str, MarketConfig] = {
     "tech_ai": MarketConfig(
         "tech_ai", "Tech & IA en vogue", load_tech_trending, "", "$", "Thématique", is_curated=True,
         note="Sélection maison de grandes valeurs tech/IA, pas un indice officiel.",
+    ),
+    "priority": MarketConfig(
+        "priority", "Mon marché prioritaire", load_priority_watchlist, "", "mixte", "Thématique", is_curated=True,
+        note="Watchlist personnalisée : semi-conducteurs, IA, luxe, énergie/uranium, mines d'or, "
+             "pharma/biotech, financières. Multi-devises (affichée par titre).",
     ),
     "crypto": MarketConfig(
         "crypto", "₿ Cryptomonnaies (Top 26)", load_crypto_top, "", "$", "Catégorie", is_curated=True,
@@ -745,6 +855,7 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
                 "Ratio Vol.": round(float(vol_ratio), 2) if pd.notna(vol_ratio) else None,
                 "% vs Bas (période)": round(pct_from_low, 1) if pd.notna(pct_from_low) else None,
                 "MACD haussier": bool(pd.notna(macd_prev) and pd.notna(macd_last) and macd_prev <= 0 and macd_last > 0),
+                "Devise": infer_currency(symbol),
                 "Score Opp.": score,
                 "_history": df_s,
             })
@@ -803,6 +914,9 @@ def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> N
         badges += f'<span class="badge badge-neutral">Vol. {row["Ratio Vol."]:.1f}x</span>'
     if row["MACD haussier"]:
         badges += '<span class="badge badge-buy">MACD haussier</span>'
+    pe = fetch_pe_ratio(row["Ticker"])
+    if pe is not None:
+        badges += f'<span class="badge badge-neutral">P/E {pe}</span>'
 
     st.markdown(
         f"""
@@ -833,6 +947,10 @@ def infer_currency(ticker: str) -> str:
         return "₩"
     if t.endswith(".TW"):
         return "NT$"
+    if t.endswith(".SZ") or t.endswith(".SS"):
+        return "¥"
+    if t.endswith(".CO"):
+        return "kr"
     return "$"
 
 
@@ -1064,6 +1182,23 @@ def fetch_single_ticker(ticker: str, display_name: str):
     return df_result.iloc[0]
 
 
+@st.cache_data(ttl=21600, show_spinner=False)
+def fetch_pe_ratio(ticker: str):
+    """P/E (cours/bénéfices) à titre informatif uniquement, jamais intégré au
+    score (voir Méthodologie). Volontairement PAS appelé pour tout un marché :
+    contrairement à yf.download (un seul appel groupé), .info fait une requête
+    réseau par titre, ce qui rendrait le scan d'un marché de plusieurs
+    centaines de valeurs beaucoup trop lent et sujet aux limites de débit de
+    Yahoo Finance. Utilisé uniquement pour les quelques titres réellement mis
+    en avant à l'écran (cartes spotlight, recherche, onglet graphique)."""
+    try:
+        info = yf.Ticker(ticker).get_info()
+        pe = info.get("trailingPE")
+        return round(pe, 1) if pe and pe > 0 else None
+    except Exception:
+        return None
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_chart_history(ticker: str) -> pd.DataFrame:
     """Historique dédié pour l'onglet graphique (5 ans, quotidien), séparé
@@ -1082,14 +1217,12 @@ def fetch_chart_history(ticker: str) -> pd.DataFrame:
 
 def slice_by_range(df: pd.DataFrame, range_key: str) -> pd.DataFrame:
     """Découpe l'historique selon une plage classique (façon Yahoo Finance /
-    Google Finance). L'app ne récupère que des barres quotidiennes (pas de
-    données intrajournalières), donc '5 jours' affiche les 5 dernières
-    séances quotidiennes plutôt que des chandelles intraday."""
+    Google Finance). Si le titre est coté depuis moins longtemps que la plage
+    demandée (ex : IPO récente + plage "5 ans"), le filtre par date ne peut
+    rien exclure et renvoie simplement tout l'historique disponible."""
     if df.empty:
         return df
     last_date = df.index.max()
-    if range_key == "5J":
-        return df.tail(5)
     if range_key == "1M":
         return df[df.index >= last_date - pd.Timedelta(days=31)]
     if range_key == "6M":
@@ -1115,14 +1248,64 @@ if market.note:
     st.sidebar.caption(f"ℹ️ {market.note}")
 
 if market.key == "custom":
-    raw_input = st.sidebar.text_area(
-        "Tickers (séparés par une virgule ou un retour à la ligne)",
-        placeholder="AAPL, MSFT, MC.PA, SAP.DE, BTC-USD ...", height=100,
+    st.session_state.setdefault("custom_watchlist", [])
+
+    with st.sidebar.form("add_ticker_form", clear_on_submit=True, border=False):
+        query = st.text_input("Ajouter une entreprise (nom ou ticker)", placeholder="ex : Nvidia, MC.PA, BTC-USD")
+        add_clicked = st.form_submit_button("Ajouter à mon marché", width="stretch")
+    if add_clicked and query.strip():
+        resolved_ticker, resolved_name = resolve_query_to_ticker(query, pd.DataFrame(), pd.DataFrame())
+        if resolved_ticker is None:
+            st.sidebar.warning(f"« {query} » non reconnu. Essayez un ticker exact (ex : NVDA, MC.PA).")
+        elif resolved_ticker in {r["Symbol"] for r in st.session_state["custom_watchlist"]}:
+            st.sidebar.info(f"{resolved_ticker} est déjà dans votre marché.")
+        else:
+            st.session_state["custom_watchlist"].append({"Symbol": resolved_ticker, "Nom": resolved_name})
+
+    st.sidebar.file_uploader(
+        "Ou recharger un marché déjà enregistré (CSV)", type=["csv"], key="custom_csv_upload",
+        help="Importe une liste Symbol/Nom exportée précédemment. L'analyse sera recalculée avec "
+             "les données de marché actuelles, pas celles du jour de l'export.",
     )
-    tickers_raw = sorted({
-        t.strip().upper() for chunk in raw_input.replace("\n", ",").split(",") for t in [chunk] if t.strip()
+    if st.session_state.get("custom_csv_upload") is not None:
+        try:
+            imported = pd.read_csv(st.session_state["custom_csv_upload"])
+            imported.columns = [c.strip() for c in imported.columns]
+            if "Symbol" not in imported.columns:
+                st.sidebar.error("Le fichier CSV doit contenir au moins une colonne 'Symbol'.")
+            else:
+                if "Nom" not in imported.columns:
+                    imported["Nom"] = imported["Symbol"]
+                st.session_state["custom_watchlist"] = (
+                    imported[["Symbol", "Nom"]].dropna(subset=["Symbol"]).drop_duplicates("Symbol").to_dict("records")
+                )
+                st.sidebar.success(f"{len(st.session_state['custom_watchlist'])} titre(s) rechargé(s) depuis le CSV.")
+        except Exception as e:
+            st.sidebar.error(f"Fichier CSV illisible : {e}")
+
+    if st.session_state["custom_watchlist"]:
+        watchlist_df = pd.DataFrame(st.session_state["custom_watchlist"])
+        edited_df = st.sidebar.data_editor(
+            watchlist_df, hide_index=True, width="stretch", num_rows="dynamic", key="custom_watchlist_editor",
+        )
+        st.session_state["custom_watchlist"] = edited_df.dropna(subset=["Symbol"]).to_dict("records")
+
+        csv_bytes = pd.DataFrame(st.session_state["custom_watchlist"]).to_csv(index=False).encode("utf-8")
+        st.sidebar.download_button(
+            "Enregistrer ce marché (CSV)", data=csv_bytes,
+            file_name=f"mon_marche_{pd.Timestamp.now().strftime('%Y-%m-%d')}.csv",
+            mime="text/csv", width="stretch",
+        )
+    else:
+        st.sidebar.caption("Aucun titre pour l'instant : recherchez une entreprise ci-dessus ou importez un CSV.")
+
+    tickers_raw = [r["Symbol"] for r in st.session_state["custom_watchlist"]]
+    names_raw = {r["Symbol"]: r["Nom"] for r in st.session_state["custom_watchlist"]}
+    universe_df = pd.DataFrame({
+        "Symbol": tickers_raw,
+        "Nom": [names_raw[t] for t in tickers_raw],
+        "Groupe": "Personnalisé",
     })
-    universe_df = pd.DataFrame({"Symbol": tickers_raw, "Nom": tickers_raw, "Groupe": "Personnalisé"})
 else:
     try:
         with st.spinner(f"Chargement de la composition : {market.label}..."):
@@ -1296,7 +1479,7 @@ if len(filtered) > 0:
     cols = st.columns(len(top3))
     for i, (col, (_, row)) in enumerate(zip(cols, top3.iterrows())):
         with col, st.container(border=True):
-            render_opportunity_card(row, market.currency, f"Opportunité n°{i + 1}")
+            render_opportunity_card(row, row["Devise"], f"Opportunité n°{i + 1}")
 
 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
@@ -1353,6 +1536,8 @@ with tab_table:
         st.warning("Aucune action ne correspond aux critères actuels. Assouplissez les filtres dans la barre latérale.")
     else:
         display_df = filtered.drop(columns=["_history"]).copy()
+        display_df["Prix"] = display_df.apply(lambda r: f"{r['Devise']}{r['Prix']:.2f}", axis=1)
+        display_df = display_df.drop(columns=["Devise"])
         display_df["Lien"] = "https://finance.yahoo.com/quote/" + display_df["Ticker"]
         display_df["Sous Bollinger"] = display_df["Sous Bollinger"].map({True: "Oui", False: "Non"})
         display_df["MACD haussier"] = display_df["MACD haussier"].map({True: "Oui", False: "Non"})
@@ -1369,7 +1554,6 @@ with tab_table:
                 hide_index=True,
                 column_config={
                     "Score Opp.": st.column_config.ProgressColumn(format="%d/100", min_value=0, max_value=100),
-                    "Prix": st.column_config.NumberColumn(format=f"{market.currency} %.2f"),
                     "Var. 1J (%)": st.column_config.NumberColumn(format="%.2f %%"),
                     "Var. 5J (%)": st.column_config.NumberColumn(format="%.2f %%"),
                     "Ratio Vol.": st.column_config.NumberColumn(format="%.2f x"),
@@ -1446,11 +1630,11 @@ with tab_chart:
         )
         stock_row = results_df[results_df["Ticker"] == selected_ticker].iloc[0]
 
-        range_labels = {"5J": "5 jours", "1M": "1 mois", "6M": "6 mois", "YTD": "YTD",
+        range_labels = {"1M": "1 mois", "6M": "6 mois", "YTD": "YTD",
                          "1A": "1 an", "5A": "5 ans", "Tout": "Tout"}
         selected_range = st.radio(
             "Plage", list(range_labels.keys()), format_func=lambda k: range_labels[k],
-            horizontal=True, key="chart_range", index=4,
+            horizontal=True, key="chart_range", index=3,
         )
 
         with st.spinner("Chargement de l'historique..."):
@@ -1459,6 +1643,14 @@ with tab_chart:
         if stock_data.empty:
             stock_data = stock_row["_history"]
         ind = compute_indicators(stock_data)
+
+        short_history = len(stock_data) < 20
+        if short_history:
+            st.info(
+                f"Historique disponible pour {selected_ticker} : {len(stock_data)} séance(s) seulement "
+                f"(cotation récente ou plage \"{range_labels[selected_range]}\" plus longue que l'historique réel). "
+                "Bandes de Bollinger, SMA 20 et RSI nécessitent au moins 20 séances et peuvent ne pas s'afficher."
+            )
 
         fig = make_subplots(
             rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.03,
@@ -1469,22 +1661,25 @@ with tab_chart:
             low=stock_data["Low"], close=stock_data["Close"], name="Prix",
             increasing_line_color="#22C55E", decreasing_line_color="#F0466E",
         ), row=1, col=1)
-        fig.add_trace(go.Scatter(x=stock_data.index, y=ind["boll_up"], name="Bollinger haut",
-                                  line=dict(color="rgba(108,142,255,.5)", width=1)), row=1, col=1)
-        fig.add_trace(go.Scatter(x=stock_data.index, y=ind["boll_low"], name="Bollinger bas",
-                                  line=dict(color="rgba(108,142,255,.5)", width=1),
-                                  fill="tonexty", fillcolor="rgba(108,142,255,.06)"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=stock_data.index, y=ind["sma20"], name="SMA 20",
-                                  line=dict(color="#F5A623", width=1.3)), row=1, col=1)
+        if ind["boll_up"].notna().any():
+            fig.add_trace(go.Scatter(x=stock_data.index, y=ind["boll_up"], name="Bollinger haut",
+                                      line=dict(color="rgba(108,142,255,.5)", width=1)), row=1, col=1)
+            fig.add_trace(go.Scatter(x=stock_data.index, y=ind["boll_low"], name="Bollinger bas",
+                                      line=dict(color="rgba(108,142,255,.5)", width=1),
+                                      fill="tonexty", fillcolor="rgba(108,142,255,.06)"), row=1, col=1)
+        if ind["sma20"].notna().any():
+            fig.add_trace(go.Scatter(x=stock_data.index, y=ind["sma20"], name="SMA 20",
+                                      line=dict(color="#F5A623", width=1.3)), row=1, col=1)
 
         vol_colors = np.where(stock_data["Close"] >= stock_data["Open"], "#22C55E", "#F0466E")
         fig.add_trace(go.Bar(x=stock_data.index, y=stock_data["Volume"], name="Volume",
                               marker_color=vol_colors, showlegend=False), row=2, col=1)
 
-        fig.add_trace(go.Scatter(x=stock_data.index, y=ind["rsi"], name="RSI (14)",
-                                  line=dict(color="#6C8EFF", width=1.5)), row=3, col=1)
-        fig.add_hline(y=30, line_dash="dash", line_color="#22C55E", row=3, col=1)
-        fig.add_hline(y=70, line_dash="dash", line_color="#F0466E", row=3, col=1)
+        if ind["rsi"].notna().any():
+            fig.add_trace(go.Scatter(x=stock_data.index, y=ind["rsi"], name="RSI (14)",
+                                      line=dict(color="#6C8EFF", width=1.5)), row=3, col=1)
+            fig.add_hline(y=30, line_dash="dash", line_color="#22C55E", row=3, col=1)
+            fig.add_hline(y=70, line_dash="dash", line_color="#F0466E", row=3, col=1)
 
         fig.update_layout(
             height=720, xaxis_rangeslider_visible=False, showlegend=True,
@@ -1503,7 +1698,7 @@ with tab_chart:
             fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"]), dict(values=missing_weekdays)])
         fig.update_xaxes(gridcolor="#232C42")
         fig.update_yaxes(gridcolor="#232C42")
-        fig.update_yaxes(title_text=f"Prix ({market.currency})", row=1, col=1)
+        fig.update_yaxes(title_text=f"Prix ({stock_row['Devise']})", row=1, col=1)
         fig.update_yaxes(title_text="Volume", row=2, col=1)
         fig.update_yaxes(title_text="RSI (14)", range=[0, 100], row=3, col=1)
 
@@ -1522,11 +1717,13 @@ with tab_chart:
             st.plotly_chart(fig, width="stretch", key="main_chart")
 
         st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Prix", f"{market.currency}{stock_row['Prix']:.2f}", f"{stock_row['Var. 1J (%)']:+.2f}%")
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Prix", f"{stock_row['Devise']}{stock_row['Prix']:.2f}", f"{stock_row['Var. 1J (%)']:+.2f}%")
         m2.metric("RSI (14)", stock_row["RSI (14)"])
         m3.metric("Ratio Volume", f"{stock_row['Ratio Vol.']}x" if stock_row["Ratio Vol."] else "N/A")
         m4.metric("Score Opportunité", f"{stock_row['Score Opp.']}/100")
+        pe_chart = fetch_pe_ratio(selected_ticker)
+        m5.metric("P/E", f"{pe_chart}x" if pe_chart is not None else "N/A")
 
 # ---- Onglet Méthodologie -------------------------------------------------
 with tab_about:
@@ -1550,6 +1747,13 @@ with tab_about:
             "qui rebondit fortement voit son score baisser même si RSI/Bollinger n'ont pas encore rattrapé "
             "ce rebond. Le score combine des signaux de survente et de retournement : il ne constitue en "
             "aucun cas une garantie de rebond futur."
+        )
+        st.caption(
+            "Le P/E (cours/bénéfices), affiché sur les cartes et l'onglet graphique, est volontairement "
+            "indicatif et non intégré au score : c'est un signal de valorisation fondamentale, pas de survente "
+            "technique, il n'est comparable qu'au sein d'un même secteur, et il est indéfini pour les sociétés "
+            "sans bénéfices (biotechs, valeurs de croissance en phase d'investissement), ce qui le rendrait peu "
+            "fiable comme critère automatique."
         )
 
     st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
