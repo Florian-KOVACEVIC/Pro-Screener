@@ -756,7 +756,7 @@ MARKETS: dict[str, MarketConfig] = {
         note="Sélection maison de grandes valeurs tech/IA, pas un indice officiel.",
     ),
     "priority": MarketConfig(
-        "priority", "Mon marché prioritaire", load_priority_watchlist, "", "mixte", "Thématique", is_curated=True,
+        "priority", "Sélection diversifiée", load_priority_watchlist, "", "mixte", "Thématique", is_curated=True,
         note="Watchlist personnalisée : semi-conducteurs, IA, luxe, énergie/uranium, mines d'or, "
              "pharma/biotech, financières. Multi-devises (affichée par titre).",
     ),
