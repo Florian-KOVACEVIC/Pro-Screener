@@ -1,6 +1,6 @@
 """
 ================================================================================
- PRO SCREENER : Opportunites Court Terme et Rebond (Multi-Marches)
+ PRO SCREENER : Opportunités Court Terme et Rebond (Multi-Marchés)
 ================================================================================
 Application Streamlit pour détecter des actions/cryptos en survente présentant
 un volume anormal et des signaux techniques de rebond, sur n'importe quel
@@ -17,7 +17,6 @@ Architecture :
   6. Interface utilisateur (sidebar, KPIs, spotlight, onglets)
 ================================================================================
 """
-
 import io
 import math
 import re
@@ -39,7 +38,6 @@ from plotly.subplots import make_subplots
 # ══════════════════════════════════════════════════════════════════════════
 # 1. CONFIGURATION DE PAGE & STYLE
 # ══════════════════════════════════════════════════════════════════════════
-
 
 def _build_favicon() -> Image.Image:
     """Construit l'icône d'onglet du navigateur sous forme d'image bitmap,
@@ -77,12 +75,11 @@ def _build_favicon() -> Image.Image:
     img.paste(gradient, (0, 0), mask)
     return img
 
-
 def render_hero_icon_svg(size: int = 40) -> str:
     """Icône affichée à côté du titre principal, avec le même dégradé que
     le favicon et que le texte en dégradé (.gradient-text).
 
-    Rendue sur une seule ligne (pas de retour à la ligne ni de ligne vide) :
+    Rendue sur une seule ligne :
     lorsque cette chaîne est insérée au milieu d'un autre bloc HTML passé à
     st.markdown, une ligne vide ferait croire au moteur Markdown que le bloc
     HTML brut est terminé, et le reste (le titre) serait alors affiché comme
@@ -98,14 +95,12 @@ def render_hero_icon_svg(size: int = 40) -> str:
         '<rect x="24" y="24" width="16" height="16" fill="url(#heroIconGrad)"/></svg>'
     )
 
-
 st.set_page_config(
     page_title="Pro Screener, Multi-Marchés",
     page_icon=_build_favicon(),
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
 
 def inject_style() -> None:
     """Injecte le thème visuel 'terminal de trading' (dark, dual-accent,
@@ -260,14 +255,12 @@ def inject_style() -> None:
         unsafe_allow_html=True,
     )
 
-
 inject_style()
 
 # ══════════════════════════════════════════════════════════════════════════
 # 2. REGISTRE DES MARCHÉS
 # ══════════════════════════════════════════════════════════════════════════
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-
 
 @dataclass
 class MarketConfig:
@@ -279,7 +272,6 @@ class MarketConfig:
     group_label: str = "Secteur"
     is_curated: bool = False  # True = liste maison, pas une composition officielle d'indice
     note: str = ""
-
 
 def _flatten_cols(df: pd.DataFrame) -> list[str]:
     """Aplati les colonnes (gère le cas où Wikipedia ajoute une ligne d'en-tête
@@ -293,11 +285,9 @@ def _flatten_cols(df: pd.DataFrame) -> list[str]:
             flat.append(str(c))
     return flat
 
-
 def _looks_unnamed(cols: list[str]) -> bool:
     unnamed = sum(1 for c in cols if c.lower().startswith("unnamed"))
     return unnamed >= max(1, len(cols) // 2)
-
 
 def _repair_header(t: pd.DataFrame) -> pd.DataFrame:
     """Si les colonnes ressemblent à des noms auto-générés par pandas
@@ -309,7 +299,6 @@ def _repair_header(t: pd.DataFrame) -> pd.DataFrame:
         repaired.columns = [str(c) for c in t.iloc[0]]
         return repaired
     return t
-
 
 def _best_wiki_table(url: str, ticker_keys: list[str], name_keys: list[str]) -> pd.DataFrame:
     """Récupère la page Wikipedia et retourne la table de composants la plus
@@ -344,13 +333,11 @@ def _best_wiki_table(url: str, ticker_keys: list[str], name_keys: list[str]) -> 
         )
     return max(candidates, key=len)
 
-
 def _col(df: pd.DataFrame, keys: list[str]) -> Optional[str]:
     for c in df.columns:
         if any(k in str(c).lower() for k in keys):
             return c
     return None
-
 
 def _clean_cell(series: pd.Series) -> pd.Series:
     """Nettoie une colonne extraite de Wikipedia : notes de bas de page
@@ -360,7 +347,6 @@ def _clean_cell(series: pd.Series) -> pd.Series:
     s = s.str.replace(r"[\n\r\t]+", " ", regex=True)
     s = s.str.replace(r"\s+", " ", regex=True)
     return s.str.strip()
-
 
 def _standardize(df: pd.DataFrame, ticker_keys, name_keys, sector_keys, clean_dot=True) -> pd.DataFrame:
     tcol, ncol, scol = _col(df, ticker_keys), _col(df, name_keys), _col(df, sector_keys)
@@ -374,14 +360,12 @@ def _standardize(df: pd.DataFrame, ticker_keys, name_keys, sector_keys, clean_do
     out = out[~out["Symbol"].str.lower().isin(["nan", "none"])]
     return out.drop_duplicates(subset="Symbol").reset_index(drop=True)
 
-
 def _ensure_suffix(ticker: str, suffix: str) -> str:
     """Évite un double suffixe (ex: 'MC.PA' + '.PA' -> 'MC.PA.PA') si la
     colonne source contenait déjà le suffixe de la place boursière."""
     if not suffix:
         return ticker
     return ticker if ticker.upper().endswith(suffix.upper()) else ticker + suffix
-
 
 # ---- Chargeurs d'indices officiels (scraping Wikipedia en direct) ---------
 # NB : par prudence, aucune liste de secours codée en dur n'est utilisée pour
@@ -393,7 +377,6 @@ def _ensure_suffix(ticker: str, suffix: str) -> str:
 def load_sp500() -> pd.DataFrame:
     t = _best_wiki_table("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", ["symbol"], ["security", "company"])
     return _standardize(t, ["symbol"], ["security", "company"], ["gics sector", "sector"])
-
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_nasdaq100() -> pd.DataFrame:
@@ -453,7 +436,6 @@ def load_nasdaq100() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
-
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_dow30() -> pd.DataFrame:
     """Composition codée en dur (indice très stable, peu de rotations par
@@ -478,12 +460,10 @@ def load_dow30() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
-
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_ftse100() -> pd.DataFrame:
     t = _best_wiki_table("https://en.wikipedia.org/wiki/FTSE_100_Index", ["ticker", "epic"], ["company", "name"])
     return _standardize(t, ["ticker", "epic"], ["company", "name"], ["sector", "industry", "ftse industry"], clean_dot=False)
-
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_hangseng() -> pd.DataFrame:
@@ -492,16 +472,13 @@ def load_hangseng() -> pd.DataFrame:
     df["Symbol"] = df["Symbol"].str.extract(r"(\d+)")[0].str.zfill(4)
     return df.dropna(subset=["Symbol"]).drop_duplicates(subset="Symbol").reset_index(drop=True)
 
-
 # ---- Listes curées (explicitement non-officielles, usage illustratif) -----
-#
 # CAC 40, DAX 40 et Nikkei 225 sont ici en liste curée plutôt qu'en scraping
 # Wikipedia en direct : ces trois pages se sont montrées peu fiables en
 # pratique (tableaux absents, colonnes ambiguës, tickers mal formés
 # provoquant l'échec du téléchargement des cours). Une liste maison stable
 # et honnêtement annoncée comme non exhaustive est préférable à une source
 # qui échoue une fois sur deux.
-
 
 def load_cac40_leaders() -> pd.DataFrame:
     data = [
@@ -524,7 +501,6 @@ def load_cac40_leaders() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
-
 def load_dax40_leaders() -> pd.DataFrame:
     data = [
         ("SAP", "SAP", "Logiciels"), ("SIE.DE", "Siemens", "Industrie"),
@@ -539,7 +515,6 @@ def load_dax40_leaders() -> pd.DataFrame:
         ("FRE.DE", "Fresenius", "Santé"), ("VNA.DE", "Vonovia", "Immobilier"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
-
 
 def load_nikkei_leaders() -> pd.DataFrame:
     data = [
@@ -556,7 +531,6 @@ def load_nikkei_leaders() -> pd.DataFrame:
         ("4502.T", "Takeda Pharmaceutical", "Santé"), ("7201.T", "Nissan Motor", "Automobile"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
-
 
 def load_sx5e_leaders() -> pd.DataFrame:
     """Grandes valeurs de la zone euro proches de la composition du
@@ -577,7 +551,6 @@ def load_sx5e_leaders() -> pd.DataFrame:
         ("BN.PA", "Danone", "Consommation"), ("SAF.PA", "Safran", "Aéronautique"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
-
 
 def load_kospi_leaders() -> pd.DataFrame:
     """Sélection maison des plus grandes capitalisations cotées au KOSPI.
@@ -621,7 +594,6 @@ def load_kospi_leaders() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
-
 def load_asia_tech_leaders() -> pd.DataFrame:
     """Sélection maison de grandes valeurs technologiques asiatiques
     (Japon, Corée, Taïwan, Chine / Hong Kong)."""
@@ -659,7 +631,6 @@ def load_tech_trending() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
-
 def load_crypto_top() -> pd.DataFrame:
     data = [
         ("BTC-USD", "Bitcoin", "Réserve de valeur"), ("ETH-USD", "Ethereum", "Layer 1"),
@@ -677,7 +648,6 @@ def load_crypto_top() -> pd.DataFrame:
         ("ARB-USD", "Arbitrum", "Layer 2"), ("OP-USD", "Optimism", "Layer 2"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
-
 
 def load_priority_watchlist() -> pd.DataFrame:
     """Marché cible personnalisé de l'utilisateur : chaîne de valeur semi-conducteurs,
@@ -740,7 +710,6 @@ def load_priority_watchlist() -> pd.DataFrame:
         ("300750.SZ", "CATL", "Batteries"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
-
 
 MARKETS: dict[str, MarketConfig] = {
     "sp500": MarketConfig("sp500", "S&P 500 (États-Unis)", load_sp500, "", "$", "Secteur GICS"),
@@ -830,7 +799,6 @@ def compute_indicators(df: pd.DataFrame) -> dict:
     return dict(rsi=rsi, sma20=sma20, boll_up=boll_up, boll_low=boll_low,
                 vol_ratio=vol_ratio, macd=macd, macd_signal=macd_signal, macd_hist=macd_hist)
 
-
 def _ramp_score(value, lo, hi, max_pts):
     """max_pts si value<=lo, 0 si value>=hi, interpolation linéaire entre les deux.
     Évite les paliers brutaux (ex : RSI 39,9 valant 15 pts de plus que RSI 40,1)."""
@@ -839,7 +807,6 @@ def _ramp_score(value, lo, hi, max_pts):
     if value >= hi:
         return 0.0
     return max_pts * (hi - value) / (hi - lo)
-
 
 def compute_score(rsi, price, boll_low, boll_mid, vol_ratio, macd_hist_prev, macd_hist_last,
                    pct_from_low, var_1j, var_5j) -> int:
@@ -898,7 +865,6 @@ def compute_score(rsi, price, boll_low, boll_mid, vol_ratio, macd_hist_prev, mac
 
     return int(round(min(max(score, 0.0), 100.0)))
 
-
 # ══════════════════════════════════════════════════════════════════════════
 # 4. PIPELINE DE RÉCUPÉRATION & D'ANALYSE
 # ══════════════════════════════════════════════════════════════════════════
@@ -912,7 +878,6 @@ def _extract_frame(data: pd.DataFrame, symbol: str, n_tickers: int) -> pd.DataFr
             return pd.DataFrame()
         return data[symbol].dropna()
     return data.dropna()
-
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, groups_map: dict):
@@ -985,7 +950,6 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
 
     return pd.DataFrame(rows), None, skipped
 
-
 # ══════════════════════════════════════════════════════════════════════════
 # 4B. CARTES D'OPPORTUNITE & JAUGE DE SCORE (SVG)
 # ══════════════════════════════════════════════════════════════════════════
@@ -1022,7 +986,6 @@ def render_gauge_svg(score: int) -> str:
         '</svg></div>'
     )
 
-
 def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> None:
     """Affiche une carte d'opportunité complète (texte + jauge) comme un seul
     bloc HTML auto-porté (bordure/fond/survol inclus) : à appeler directement
@@ -1052,7 +1015,6 @@ def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> N
         unsafe_allow_html=True,
     )
 
-
 def infer_currency(ticker: str) -> str:
     t = ticker.upper()
     if t.endswith(".PA") or t.endswith(".DE") or t.endswith(".MC") or t.endswith(".MI") or t.endswith(".AS"):
@@ -1072,7 +1034,6 @@ def infer_currency(ticker: str) -> str:
     if t.endswith(".CO"):
         return "kr"
     return "$"
-
 
 # ══════════════════════════════════════════════════════════════════════════
 # 4C. NOMS ET SECTEURS COURTS (jamais tronqués mid-mot dans les tableaux)
@@ -1095,7 +1056,6 @@ _NAME_OVERRIDES = {
     "sea limited (adr)": "Sea Limited",
     "pdd holdings (adr)": "PDD Holdings",
 }
-
 
 def shorten_name(name: str, max_len: int = 24) -> str:
     """Nom court et compréhensible plutôt que tronqué au milieu par
@@ -1142,7 +1102,6 @@ _SECTOR_SHORT = {
     "tech / investissement": "Tech / Invest.",
 }
 
-
 def shorten_sector(sector: str, max_len: int = 18) -> str:
     s = str(sector).strip()
     if not s:
@@ -1160,7 +1119,6 @@ def shorten_sector(sector: str, max_len: int = 18) -> str:
         return short.strip()
     return s
 
-
 # ══════════════════════════════════════════════════════════════════════════
 # 4D. RECHERCHE LIBRE, TOUS MARCHÉS (résolution nom -> ticker)
 # ══════════════════════════════════════════════════════════════════════════
@@ -1170,7 +1128,6 @@ def _norm(s: str) -> str:
     sans ponctuation ni espaces."""
     s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-z0-9]", "", s.lower())
-
 
 def _build_aliases() -> dict:
     """Table de correspondance nom d'entreprise -> (ticker, nom affiché).
@@ -1238,9 +1195,7 @@ def _build_aliases() -> dict:
             continue
     return {k: v for k, v in aliases.items() if k}
 
-
 ALIASES = _build_aliases()
-
 
 def resolve_query_to_ticker(query: str, universe_df: pd.DataFrame, results_df: pd.DataFrame):
     """Résout une saisie libre (ticker ou nom d'entreprise) en un ticker
@@ -1290,7 +1245,6 @@ def resolve_query_to_ticker(query: str, universe_df: pd.DataFrame, results_df: p
 
     return None, None
 
-
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_single_ticker(ticker: str, display_name: str):
     """Récupère et analyse un seul ticker, indépendamment du marché
@@ -1300,7 +1254,6 @@ def fetch_single_ticker(ticker: str, display_name: str):
     if err or df_result.empty:
         return None
     return df_result.iloc[0]
-
 
 @st.cache_data(ttl=21600, show_spinner=False)
 def fetch_pe_ratio(ticker: str):
@@ -1317,7 +1270,6 @@ def fetch_pe_ratio(ticker: str):
         return round(pe, 1) if pe and pe > 0 else None
     except Exception:
         return None
-
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_chart_history(ticker: str) -> pd.DataFrame:
@@ -1354,7 +1306,6 @@ def slice_by_range(df: pd.DataFrame, range_key: str) -> pd.DataFrame:
     if range_key == "5A":
         return df[df.index >= last_date - pd.Timedelta(days=5 * 366)]
     return df  # "Tout"
-
 
 # ══════════════════════════════════════════════════════════════════════════
 # 5. SIDEBAR : SELECTION DU MARCHE ET FILTRES
@@ -1445,17 +1396,14 @@ PRESETS = {
     "Agressif": {"score": 25, "rsi": 45},
 }
 
-
 def _apply_preset():
     p = PRESETS.get(st.session_state.get("preset_choice"))
     if p:
         st.session_state["min_score"] = p["score"]
         st.session_state["rsi_max"] = p["rsi"]
 
-
 def _mark_custom():
     st.session_state["preset_choice"] = "Personnalisé"
-
 
 st.session_state.setdefault("min_score", 40)
 st.session_state.setdefault("rsi_max", 35)
@@ -1883,8 +1831,8 @@ with tab_about:
             """
         )
         st.caption(
-            "Le score est plafonné à 100. Les composantes RSI, Bollinger et Range évoluent en continu "
-            "(pas de palier brutal), et le momentum récent est explicitement pris en compte : un titre "
+            "Le score est plafonné à 100. Les composantes RSI, Bollinger et Range évoluent en continu, "
+            "et le momentum récent est explicitement pris en compte : un titre "
             "qui rebondit fortement voit son score baisser même si RSI/Bollinger n'ont pas encore rattrapé "
             "ce rebond. Le score combine des signaux de survente et de retournement : il ne constitue en "
             "aucun cas une garantie de rebond futur."
