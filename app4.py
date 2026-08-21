@@ -1,6 +1,6 @@
 """
 ================================================================================
- PRO SCREENER : Opportunités Court Terme et Rebond (Multi-Marchés)
+ PRO SCREENER : Opportunites Court Terme et Rebond (Multi-Marches)
 ================================================================================
 Application Streamlit pour détecter des actions/cryptos en survente présentant
 un volume anormal et des signaux techniques de rebond, sur n'importe quel
@@ -186,12 +186,6 @@ def inject_style() -> None:
         /* ---------- Disclaimer centré et discret ---------- */
         .disclaimer{ max-width:680px; margin:40px auto 12px auto; text-align:center;
                       color:var(--text-lo); font-size:.74rem; line-height:1.6; opacity:.75; }
-
-        /* ---------- Metrics (onglet graphique) ---------- */
-        [data-testid="stMetric"]{ background:var(--bg-card); border:1px solid var(--border); border-radius:14px;
-                                    padding:14px 18px; }
-        [data-testid="stMetricLabel"]{ color:var(--text-lo) !important; font-size:.8rem !important; }
-        [data-testid="stMetricValue"]{ font-family:'IBM Plex Mono',monospace !important; color:var(--text-hi) !important; }
 
         /* ---------- Grille de KPI (responsive : passe à la ligne si l'écran est étroit) ---------- */
         .kpi-grid{ display:flex; flex-wrap:wrap; gap:12px; margin:4px 0 8px 0; }
@@ -403,14 +397,86 @@ def load_sp500() -> pd.DataFrame:
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_nasdaq100() -> pd.DataFrame:
-    t = _best_wiki_table("https://en.wikipedia.org/wiki/Nasdaq-100", ["ticker", "symbol"], ["company", "name", "constituent"])
-    return _standardize(t, ["ticker", "symbol"], ["company", "name", "constituent"], ["gics sector", "sector"])
+    """Composition codée en dur plutôt que scrapée en direct : la page
+    Wikipedia du Nasdaq-100 s'est révélée trop instable à parser de façon
+    fiable (en-têtes multi-lignes, structure changeante). Base de confiance
+    moyenne à haute sur les valeurs les plus importantes, plus faible sur la
+    longue traîne (l'indice compte 100 valeurs avec un renouvellement annuel
+    non négligeable) : si un titre est signalé dans le panneau "titres
+    ignorés" au chargement, son ticker a probablement changé depuis."""
+    data = [
+        ("AAPL", "Apple", "Tech"), ("MSFT", "Microsoft", "Tech"), ("GOOGL", "Alphabet (A)", "Tech"),
+        ("GOOG", "Alphabet (C)", "Tech"), ("AMZN", "Amazon", "Conso discrétionnaire"),
+        ("NVDA", "Nvidia", "Semi-conducteurs"), ("META", "Meta Platforms", "Tech"),
+        ("TSLA", "Tesla", "Automobile"), ("AVGO", "Broadcom", "Semi-conducteurs"),
+        ("COST", "Costco", "Distribution"), ("PEP", "PepsiCo", "Consommation"),
+        ("ADBE", "Adobe", "Logiciel"), ("NFLX", "Netflix", "Media / Streaming"),
+        ("AMD", "AMD", "Semi-conducteurs"), ("CSCO", "Cisco", "Réseaux"),
+        ("TMUS", "T-Mobile US", "Télécoms"), ("INTC", "Intel", "Semi-conducteurs"),
+        ("QCOM", "Qualcomm", "Semi-conducteurs"), ("TXN", "Texas Instruments", "Semi-conducteurs"),
+        ("AMGN", "Amgen", "Biotech"), ("HON", "Honeywell", "Industrie"),
+        ("INTU", "Intuit", "Logiciel"), ("AMAT", "Applied Materials", "Equipements semi-conducteurs"),
+        ("BKNG", "Booking Holdings", "Voyage / Internet"), ("ISRG", "Intuitive Surgical", "Santé / Robotique"),
+        ("VRTX", "Vertex Pharmaceuticals", "Biotech"), ("ADP", "ADP", "Services aux entreprises"),
+        ("SBUX", "Starbucks", "Restauration"), ("GILD", "Gilead Sciences", "Biotech"),
+        ("MU", "Micron", "Semi-conducteurs"), ("LRCX", "Lam Research", "Equipements semi-conducteurs"),
+        ("ADI", "Analog Devices", "Semi-conducteurs"), ("PANW", "Palo Alto Networks", "Cybersécurité"),
+        ("MDLZ", "Mondelez International", "Consommation"), ("REGN", "Regeneron", "Biotech"),
+        ("KLAC", "KLA Corp", "Equipements semi-conducteurs"), ("SNPS", "Synopsys", "Logiciel"),
+        ("CDNS", "Cadence Design Systems", "Logiciel"), ("MELI", "Mercado Libre", "E-commerce"),
+        ("CSX", "CSX Corp", "Transport ferroviaire"), ("MAR", "Marriott International", "Hôtellerie"),
+        ("ORLY", "O'Reilly Automotive", "Distribution"), ("CTAS", "Cintas", "Services aux entreprises"),
+        ("ASML", "ASML Holding", "Equipements semi-conducteurs"), ("PYPL", "PayPal", "Paiements"),
+        ("NXPI", "NXP Semiconductors", "Semi-conducteurs"), ("ABNB", "Airbnb", "Voyage / Internet"),
+        ("WDAY", "Workday", "Logiciel"), ("FTNT", "Fortinet", "Cybersécurité"),
+        ("MNST", "Monster Beverage", "Consommation"), ("PCAR", "Paccar", "Industrie / Camions"),
+        ("ROP", "Roper Technologies", "Industrie"), ("PAYX", "Paychex", "Services aux entreprises"),
+        ("AEP", "American Electric Power", "Energie / Utilities"), ("ODFL", "Old Dominion Freight Line", "Transport"),
+        ("KDP", "Keurig Dr Pepper", "Consommation"), ("EXC", "Exelon", "Energie / Utilities"),
+        ("CPRT", "Copart", "Services aux entreprises"), ("DXCM", "Dexcom", "Santé / Medtech"),
+        ("XEL", "Xcel Energy", "Energie / Utilities"), ("CRWD", "CrowdStrike", "Cybersécurité"),
+        ("ROST", "Ross Stores", "Distribution"), ("FAST", "Fastenal", "Distribution industrielle"),
+        ("IDXX", "IDEXX Laboratories", "Santé animale"), ("VRSK", "Verisk Analytics", "Data / Analytics"),
+        ("BIIB", "Biogen", "Biotech"), ("EA", "Electronic Arts", "Jeu vidéo"),
+        ("GEHC", "GE HealthCare", "Santé / Medtech"), ("CTSH", "Cognizant", "Services IT"),
+        ("DDOG", "Datadog", "Logiciel / Cloud"), ("TTWO", "Take-Two Interactive", "Jeu vidéo"),
+        ("ANSS", "Ansys", "Logiciel"), ("ON", "ON Semiconductor", "Semi-conducteurs"),
+        ("GFS", "GlobalFoundries", "Semi-conducteurs"), ("ZS", "Zscaler", "Cybersécurité"),
+        ("TEAM", "Atlassian", "Logiciel"), ("ILMN", "Illumina", "Biotech / Séquençage"),
+        ("MRVL", "Marvell Technology", "Semi-conducteurs"), ("LULU", "Lululemon", "Habillement"),
+        ("SIRI", "Sirius XM", "Media"), ("DASH", "DoorDash", "Livraison / Internet"),
+        ("CDW", "CDW Corp", "Distribution IT"), ("FANG", "Diamondback Energy", "Energie"),
+        ("MCHP", "Microchip Technology", "Semi-conducteurs"), ("CHTR", "Charter Communications", "Télécoms"),
+        ("KHC", "Kraft Heinz", "Consommation"), ("CCEP", "Coca-Cola Europacific Partners", "Consommation"),
+        ("WBD", "Warner Bros Discovery", "Media"), ("EBAY", "eBay", "E-commerce"),
+        ("APP", "AppLovin", "Logiciel / Adtech"), ("AXON", "Axon Enterprise", "Sécurité / Défense"),
+    ]
+    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_dow30() -> pd.DataFrame:
-    t = _best_wiki_table("https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average", ["symbol", "ticker"], ["company", "name"])
-    return _standardize(t, ["symbol", "ticker"], ["company", "name"], ["industry"])
+    """Composition codée en dur (indice très stable, peu de rotations par
+    an) plutôt que scrapée en direct, pour la même raison de fiabilité que
+    le Nasdaq-100 : la page Wikipedia s'est révélée instable à parser."""
+    data = [
+        ("AAPL", "Apple", "Tech"), ("MSFT", "Microsoft", "Tech"), ("UNH", "UnitedHealth Group", "Santé"),
+        ("GS", "Goldman Sachs", "Finance"), ("HD", "Home Depot", "Distribution"),
+        ("CAT", "Caterpillar", "Industrie"), ("CRM", "Salesforce", "Logiciel"),
+        ("MCD", "McDonald's", "Restauration"), ("V", "Visa", "Paiements"),
+        ("AMGN", "Amgen", "Biotech"), ("TRV", "Travelers Companies", "Assurance"),
+        ("AXP", "American Express", "Finance"), ("JPM", "JPMorgan Chase", "Finance"),
+        ("IBM", "IBM", "Tech"), ("HON", "Honeywell", "Industrie"),
+        ("PG", "Procter & Gamble", "Consommation"), ("CVX", "Chevron", "Energie"),
+        ("BA", "Boeing", "Aéronautique"), ("NKE", "Nike", "Habillement"),
+        ("JNJ", "Johnson & Johnson", "Santé"), ("MRK", "Merck", "Pharma"),
+        ("DIS", "Walt Disney", "Media / Divertissement"), ("KO", "Coca-Cola", "Consommation"),
+        ("MMM", "3M", "Industrie"), ("WMT", "Walmart", "Distribution"),
+        ("NVDA", "Nvidia", "Semi-conducteurs"), ("SHW", "Sherwin-Williams", "Chimie"),
+        ("AMZN", "Amazon", "Conso discrétionnaire"), ("CSCO", "Cisco", "Réseaux"),
+        ("VZ", "Verizon", "Télécoms"),
+    ]
+    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
@@ -678,8 +744,17 @@ def load_priority_watchlist() -> pd.DataFrame:
 
 MARKETS: dict[str, MarketConfig] = {
     "sp500": MarketConfig("sp500", "S&P 500 (États-Unis)", load_sp500, "", "$", "Secteur GICS"),
-    "nasdaq100": MarketConfig("nasdaq100", "Nasdaq 100 (États-Unis)", load_nasdaq100, "", "$", "Secteur GICS"),
-    "dow30": MarketConfig("dow30", "Dow Jones 30 (États-Unis)", load_dow30, "", "$", "Industrie"),
+    "nasdaq100": MarketConfig(
+        "nasdaq100", "Nasdaq 100 (États-Unis)", load_nasdaq100, "", "$", "Secteur GICS", is_curated=True,
+        note="Composition codée en dur (le scraping Wikipedia s'est révélé trop instable). Confiance "
+             "moyenne à haute sur les plus grosses valeurs, plus faible sur la longue traîne : l'indice "
+             "compte 100 valeurs avec un renouvellement annuel non négligeable.",
+    ),
+    "dow30": MarketConfig(
+        "dow30", "Dow Jones 30 (États-Unis)", load_dow30, "", "$", "Industrie", is_curated=True,
+        note="Composition codée en dur (le scraping Wikipedia s'est révélé trop instable). Indice très "
+             "stable (peu de rotations par an), confiance élevée sur cette liste.",
+    ),
     "cac40": MarketConfig(
         "cac40", "CAC 40, grandes capitalisations (France)", load_cac40_leaders, "", "€", "Secteur", is_curated=True,
         note="Sélection maison des principales valeurs du CAC 40, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
@@ -700,8 +775,8 @@ MARKETS: dict[str, MarketConfig] = {
     "hangseng": MarketConfig("hangseng", "Hang Seng (Hong Kong)", load_hangseng, ".HK", "HK$", "Secteur"),
     "kospi": MarketConfig(
         "kospi", "Kospi, grandes capitalisations (Corée)", load_kospi_leaders, "", "₩", "Secteur", is_curated=True,
-        note="Sélection maison d'une trentaine de grandes valeurs, PAS un indice officiel : le KOSPI "
-             "compte environ 800 sociétés cotées au total, cette liste n'en couvre qu'une petite partie.",
+        note="Sélection maison d'une trentaine de grandes valeurs : le KOSPI compte environ 800 sociétés "
+             "cotées au total, cette liste n'en couvre qu'une petite partie.",
     ),
     "asia_tech": MarketConfig(
         "asia_tech", "Asie, leaders tech", load_asia_tech_leaders, "", "$", "Pays / Thématique", is_curated=True,
@@ -1393,7 +1468,7 @@ st.sidebar.radio(
 with st.sidebar.expander("Critères de sélection", expanded=True):
     group_options = ["Tous"] + sorted({shorten_sector(g) for g in universe_df["Groupe"].dropna()}) if len(universe_df) else ["Tous"]
     selected_group = st.selectbox(market.group_label, group_options)
-    min_score = st.slider("Score Opportunité Min.", 0, 100, step=5, key="min_score", on_change=_mark_custom)
+    min_score = st.slider("Score Opportunité Min.", 1, 100, step=5, key="min_score", on_change=_mark_custom)
     rsi_max = st.slider("RSI Max (zone de survente)", 10, 50, key="rsi_max", on_change=_mark_custom)
     st.caption(
         "Score et RSI sont deux filtres indépendants (ET logique) : baisser le score minimum "
@@ -1762,13 +1837,34 @@ with tab_chart:
             st.plotly_chart(fig, width="stretch", key="main_chart")
 
         st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
-        m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("Prix", f"{stock_row['Devise']}{stock_row['Prix']:.2f}", f"{stock_row['Var. 1J (%)']:+.2f}%")
-        m2.metric("RSI (14)", stock_row["RSI (14)"])
-        m3.metric("Ratio Volume", f"{stock_row['Ratio Vol.']}x" if stock_row["Ratio Vol."] else "N/A")
-        m4.metric("Score Opportunité", f"{stock_row['Score Opp.']}/100")
+
+        range_pct = None
+        if len(stock_data) >= 2:
+            first_close = float(stock_data["Close"].iloc[0])
+            last_close = float(stock_data["Close"].iloc[-1])
+            if first_close:
+                range_pct = (last_close - first_close) / first_close * 100
+        if range_pct is None:
+            evo_value, evo_color = "N/A", "var(--text-hi)"
+        else:
+            evo_value = f"{range_pct:+.2f} %"
+            evo_color = "var(--rose)" if range_pct < 0 else "var(--emerald)"
+
         pe_chart = fetch_pe_ratio(selected_ticker)
-        m5.metric("P/E", f"{pe_chart}x" if pe_chart is not None else "N/A")
+        chart_kpis = [
+            ("Prix", f"{stock_row['Devise']}{stock_row['Prix']:.2f}", "var(--text-hi)"),
+            (f"Évolution ({range_labels[selected_range]})", evo_value, evo_color),
+            ("RSI (14)", str(stock_row["RSI (14)"]) if stock_row["RSI (14)"] is not None else "N/A", "var(--text-hi)"),
+            ("Ratio Volume", f"{stock_row['Ratio Vol.']}x" if stock_row["Ratio Vol."] else "N/A", "var(--text-hi)"),
+            ("Score Opportunité", f"{stock_row['Score Opp.']} / 100", "var(--text-hi)"),
+            ("P/E", f"{pe_chart}x" if pe_chart is not None else "N/A", "var(--text-hi)"),
+        ]
+        chart_kpi_html = "".join(
+            f'<div class="kpi-card"><div class="kpi-label">{label}</div>'
+            f'<div class="kpi-value" style="color:{color}">{value}</div></div>'
+            for label, value, color in chart_kpis
+        )
+        st.markdown(f'<div class="kpi-grid">{chart_kpi_html}</div>', unsafe_allow_html=True)
 
 # ---- Onglet Méthodologie -------------------------------------------------
 with tab_about:
