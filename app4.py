@@ -676,7 +676,7 @@ def load_priority_watchlist() -> pd.DataFrame:
         ("BIDU", "Baidu (ADR)", "IA / Internet"), ("WK", "Workiva", "Logiciel"),
         ("SOUN", "SoundHound AI", "IA"), ("PLTR", "Palantir", "IA / Logiciel"),
         # Electronique / optique / matériel
-        ("2CRSI.PA", "2CRSI (serveurs IA / datacenter)", "Serveurs / Datacenter"), ("SONY", "Sony Group (ADR)", "Electronique"),
+        ("SONY", "Sony Group (ADR)", "Electronique"),
         ("LITE", "Lumentum Holdings", "Optique / Composants"), ("AMBA", "Ambarella", "Semi-conducteurs"),
         ("DELL", "Dell Technologies", "Matériel informatique"),
         # Luxe / conso France
