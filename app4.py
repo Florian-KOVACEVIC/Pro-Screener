@@ -2,7 +2,6 @@
 ================================================================================
  PRO SCREENER : Opportunités Court Terme et Rebond (Multi-Marchés)
 ================================================================================
-
 Architecture :
   1. Configuration & style (thème "terminal de trading")
   2. Registre des marchés (MarketConfig) + chargeurs d'univers
@@ -415,10 +414,10 @@ def load_nasdaq100() -> pd.DataFrame:
         ("XEL", "Xcel Energy", "Energie / Utilities"), ("CRWD", "CrowdStrike", "Cybersécurité"),
         ("ROST", "Ross Stores", "Distribution"), ("FAST", "Fastenal", "Distribution industrielle"),
         ("IDXX", "IDEXX Laboratories", "Santé animale"), ("VRSK", "Verisk Analytics", "Data / Analytics"),
-        ("BIIB", "Biogen", "Biotech"), ("EA", "Electronic Arts", "Jeu vidéo"),
+        ("BIIB", "Biogen", "Biotech"),
         ("GEHC", "GE HealthCare", "Santé / Medtech"), ("CTSH", "Cognizant", "Services IT"),
         ("DDOG", "Datadog", "Logiciel / Cloud"), ("TTWO", "Take-Two Interactive", "Jeu vidéo"),
-        ("ANSS", "Ansys", "Logiciel"), ("ON", "ON Semiconductor", "Semi-conducteurs"),
+        ("ON", "ON Semiconductor", "Semi-conducteurs"),
         ("GFS", "GlobalFoundries", "Semi-conducteurs"), ("ZS", "Zscaler", "Cybersécurité"),
         ("TEAM", "Atlassian", "Logiciel"), ("ILMN", "Illumina", "Biotech / Séquençage"),
         ("MRVL", "Marvell Technology", "Semi-conducteurs"), ("LULU", "Lululemon", "Habillement"),
