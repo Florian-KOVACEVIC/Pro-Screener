@@ -610,21 +610,6 @@ def load_asia_tech_leaders() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
-def load_tech_trending() -> pd.DataFrame:
-    data = [
-        ("AAPL", "Apple", "Big Tech"), ("MSFT", "Microsoft", "Big Tech"),
-        ("GOOGL", "Alphabet", "Big Tech"), ("AMZN", "Amazon", "Big Tech"),
-        ("NVDA", "Nvidia", "Semi-conducteurs / IA"), ("META", "Meta Platforms", "Big Tech"),
-        ("TSLA", "Tesla", "Tech / Auto"), ("AMD", "AMD", "Semi-conducteurs / IA"),
-        ("AVGO", "Broadcom", "Semi-conducteurs / IA"), ("ORCL", "Oracle", "Cloud / IA"),
-        ("CRM", "Salesforce", "Cloud / SaaS"), ("ADBE", "Adobe", "Cloud / SaaS"),
-        ("NFLX", "Netflix", "Streaming"), ("PLTR", "Palantir", "IA / Data"),
-        ("SMCI", "Super Micro Computer", "Infra IA"), ("MU", "Micron", "Semi-conducteurs / IA"),
-        ("QCOM", "Qualcomm", "Semi-conducteurs / IA"), ("INTC", "Intel", "Semi-conducteurs / IA"),
-        ("IBM", "IBM", "Cloud / IA"), ("NOW", "ServiceNow", "Cloud / SaaS"),
-    ]
-    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
-
 def load_crypto_top() -> pd.DataFrame:
     data = [
         ("BTC-USD", "Bitcoin", "Réserve de valeur"), ("ETH-USD", "Ethereum", "Layer 1"),
@@ -744,10 +729,6 @@ MARKETS: dict[str, MarketConfig] = {
     "asia_tech": MarketConfig(
         "asia_tech", "Asie, leaders tech", load_asia_tech_leaders, "", "$", "Pays / Thématique", is_curated=True,
         note="Sélection maison de grandes valeurs technologiques asiatiques (Japon, Corée, Taïwan, Chine).",
-    ),
-    "tech_ai": MarketConfig(
-        "tech_ai", "Tech & IA en vogue", load_tech_trending, "", "$", "Thématique", is_curated=True,
-        note="Sélection maison de grandes valeurs tech/IA, pas un indice officiel.",
     ),
     "priority": MarketConfig(
         "priority", "Sélection diversifiée", load_priority_watchlist, "", "mixte", "Thématique", is_curated=True,
@@ -1129,8 +1110,7 @@ def _build_aliases() -> dict:
     Volontairement limitée aux actions ordinaires (aucun produit dérivé,
     ETF à levier, warrant ou option) sur des sociétés dont le ticker
     principal est bien établi, afin de limiter le risque d'erreur. Elle est
-    complétée par les listes déjà curées de l'application (Tech & IA,
-    cryptomonnaies, Kospi, Asie tech).
+    complétée par les listes déjà curées de l'application (cryptomonnaies, Kospi, Asie tech).
     """
     raw = {
         # Méga-capitalisations US
@@ -1178,7 +1158,7 @@ def _build_aliases() -> dict:
         "unilever": ("UL", "Unilever"), "gsk": ("GSK", "GSK"),
     }
     aliases = dict(raw)
-    for loader in (load_tech_trending, load_crypto_top, load_kospi_leaders, load_asia_tech_leaders,
+    for loader in (load_crypto_top, load_kospi_leaders, load_asia_tech_leaders,
                    load_cac40_leaders, load_dax40_leaders, load_nikkei_leaders, load_sx5e_leaders):
         try:
             for _, r in loader().iterrows():
