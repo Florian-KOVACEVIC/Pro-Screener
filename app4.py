@@ -628,7 +628,7 @@ def load_crypto_top() -> pd.DataFrame:
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
 def load_priority_watchlist() -> pd.DataFrame:
-    """Marché cible personnalisé de l'utilisateur : chaîne de valeur semi-conducteurs,
+    """Mon Marché cible personnalisé : chaîne de valeur semi-conducteurs,
     IA, luxe, énergie/uranium, mines d'or, pharma/biotech, financières/bourses.
     Multi-devises (voir infer_currency, appliqué par titre)."""
     data = [
@@ -650,16 +650,18 @@ def load_priority_watchlist() -> pd.DataFrame:
         ("AMAT", "Applied Materials", "Equipements semi-conducteurs"),
         ("LRCX", "Lam Research", "Equipements semi-conducteurs"),
         ("KLAC", "KLA Corp", "Equipements semi-conducteurs"),
-        # IA / logiciel / data
-        ("BIDU", "Baidu (ADR)", "IA / Internet"), ("WK", "Workiva", "Logiciel"),
+        # IA / Logiciel / Data
+        ("BIDU", "Baidu (ADR)", "IA / Internet"), ("WK", "Workiva", "Logiciel"), ("CAP.PA", "Capgemini", "Services IT"),
         ("SOUN", "SoundHound AI", "IA"), ("PLTR", "Palantir", "IA / Logiciel"),
+        ("SNOW", "Snowflake", "Data / Logiciel"), ("BBAI", "BigBear.ai", "IA / Data" ),
         # Electronique / optique / matériel
         ("SONY", "Sony Group (ADR)", "Electronique"),
         ("LITE", "Lumentum Holdings", "Optique / Composants"), ("AMBA", "Ambarella", "Semi-conducteurs"),
-        ("DELL", "Dell Technologies", "Matériel informatique"),
+        ("DELL", "Dell Technologies", "Matériel informatique"), ("COHR" , "Coherent Corp." , "Optique / Composants"),
+        ("HPQ", "HP Inc." , "Matériel informatique"), ("QCOM" , "Qualcomm Inc." , "Semi-conducteurs")
         # Luxe / conso France
         ("KER.PA", "Kering", "Luxe"), ("MC.PA", "LVMH", "Luxe"), ("RMS.PA", "Hermès", "Luxe"),
-        ("CAP.PA", "Capgemini", "Services IT"), ("ORA.PA", "Orange", "Télécoms"),
+        ("EL.PA", "EssilorLuxottica", "Luxe"), ("OR.PA", "L'Oréal", "Luxe"),
         # Auto / industrie
         ("STLA", "Stellantis", "Automobile"), ("BYDDY", "BYD (ADR)", "Automobile"),
         ("TM", "Toyota Motors (ADR)", "Automobile"), ("005380.KS", "Hyundai Motor", "Automobile"),
@@ -668,14 +670,20 @@ def load_priority_watchlist() -> pd.DataFrame:
         # Energie / uranium / défense nucléaire
         ("TTE.PA", "TotalEnergies", "Energie"), ("CCJ", "Cameco", "Uranium"),
         ("BWXT", "BWX Technologies (composants nucléaires)", "Nucléaire / Défense"),
+        ("UEC", "Uranium Energy Corp", "Uranium" ), ("NXE" , "NexGen Energy" , "Uranium"),
+        ("LEU", "Centrus Energy", "Enrichissement nucléaire"), ("CW", "Curtiss-Wright", "Nucléaire / Défense" ),
+        ("CEG" , "Constellation Energy", "Énergie nucléaire"),
         # Mines d'or
         ("NEM", "Newmont", "Mines d'or"), ("AEM", "Agnico Eagle Mines", "Mines d'or"),
         ("GOLD", "Barrick Mining (anciennement Barrick Gold)", "Mines d'or"), ("KGC", "Kinross Gold", "Mines d'or"),
+        ("FNV", "Franco-Nevada", "Mines d'or"), ("WPM", "Wheaton Precious Metals", "Mines d'or"),
+        ("GFI", "Gold Fields" , "Mines d'or"), ("AU", "AngloGold Ashanti", "Mines d'or"),
         ("6181.HK", "Laopu Gold", "Bijouterie / Or"),
-        # Pharma / biotech
+        # Pharma / Biotech
         ("207940.KS", "Samsung Biologics", "Biotech"), ("SAN.PA", "Sanofi", "Pharma"),
         ("NVO", "Novo Nordisk (ADR)", "Pharma"), ("LLY", "Eli Lilly", "Pharma"),
-        ("IPN.PA", "Ipsen (biopharma)", "Pharma"), ("GNFT.PA", "Genfit (biotech, maladies du foie)", "Biotech"), ("NANO.PA", "Nanobiotix (biotech, oncologie)", "Biotech"),
+        ("IPN.PA", "Ipsen (biopharma)", "Pharma"), ("GNFT.PA", "Genfit (biotech, maladies du foie)", "Biotech"), 
+        ("NANO.PA", "Nanobiotix (biotech, oncologie)", "Biotech"),
         # Financières / bourses
         ("JPM", "JPMorgan Chase", "Banque"), ("GS", "Goldman Sachs", "Banque"),
         ("MS", "Morgan Stanley", "Banque"), ("MSCI", "MSCI (indices boursiers, données financières)", "Indices / Data financière"),
@@ -685,7 +693,8 @@ def load_priority_watchlist() -> pd.DataFrame:
         ("V", "Visa", "Paiements"), ("MA", "Mastercard", "Paiements"),
         # Chine
         ("0700.HK", "Tencent Holdings", "Internet / Gaming"), ("BABA", "Alibaba (ADR)", "E-commerce / Cloud"),
-        ("300750.SZ", "CATL", "Batteries"),
+        ("300750.SZ", "CATL", "Batteries"), ("PDD", "PDD Holdings (ADR)", "E-commerce"), 
+        ("1810.HK", "Xiaomi Corporation", "Consumer Electronics / EVs"), ("9999.HK", "NetEase", "Gaming / Internet"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
