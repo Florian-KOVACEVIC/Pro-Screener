@@ -653,43 +653,43 @@ def load_priority_watchlist() -> pd.DataFrame:
         # IA / Logiciel / Data
         ("BIDU", "Baidu (ADR)", "IA / Internet"), ("WK", "Workiva", "Logiciel"), ("CAP.PA", "Capgemini", "Services IT"),
         ("SOUN", "SoundHound AI", "IA"), ("PLTR", "Palantir", "IA / Logiciel"),
-        ("SNOW", "Snowflake", "Data / Logiciel"), ("BBAI", "BigBear.ai", "IA / Data" ),
+        ("SNOW", "Snowflake", "Data / Logiciel"), ("BBAI", "BigBear.ai", "IA / Data"),
         # Electronique / optique / matériel
         ("SONY", "Sony Group (ADR)", "Electronique"),
         ("LITE", "Lumentum Holdings", "Optique / Composants"), ("AMBA", "Ambarella", "Semi-conducteurs"),
-        ("DELL", "Dell Technologies", "Matériel informatique"), ("COHR" , "Coherent Corp." , "Optique / Composants"),
-        ("HPQ", "HP Inc." , "Matériel informatique"), ("QCOM" , "Qualcomm Inc." , "Semi-conducteurs")
+        ("DELL", "Dell Technologies", "Matériel informatique"), ("COHR", "Coherent Corp.", "Optique / Composants"),
+        ("HPQ", "HP Inc.", "Matériel informatique"), ("QCOM", "Qualcomm Inc.", "Semi-conducteurs")
         # Luxe / conso France
         ("KER.PA", "Kering", "Luxe"), ("MC.PA", "LVMH", "Luxe"), ("RMS.PA", "Hermès", "Luxe"),
         ("EL.PA", "EssilorLuxottica", "Luxe"), ("OR.PA", "L'Oréal", "Luxe"),
         # Auto / industrie
-        ("STLA", "Stellantis", "Automobile"), ("BYDDY", "BYD (ADR)", "Automobile"),
-        ("TM", "Toyota Motors (ADR)", "Automobile"), ("005380.KS", "Hyundai Motor", "Automobile"),
+        ("STLA", "Stellantis", "Automobile"), ("BYDDY", "BYD", "Automobile"),
+        ("TM", "Toyota Motors", "Automobile"), ("005380.KS", "Hyundai Motor", "Automobile"),
         ("6273.T", "SMC Corp", "Automatisation / Robotique"), ("EMR", "Emerson Electric", "Industrie"),
         ("RR.L", "Rolls Royce", "Aéronautique / Défense"),
         # Energie / uranium / défense nucléaire
         ("TTE.PA", "TotalEnergies", "Energie"), ("CCJ", "Cameco", "Uranium"),
-        ("BWXT", "BWX Technologies (composants nucléaires)", "Nucléaire / Défense"),
-        ("UEC", "Uranium Energy Corp", "Uranium" ), ("NXE" , "NexGen Energy" , "Uranium"),
-        ("LEU", "Centrus Energy", "Enrichissement nucléaire"), ("CW", "Curtiss-Wright", "Nucléaire / Défense" ),
-        ("CEG" , "Constellation Energy", "Énergie nucléaire"),
+        ("BWXT", "BWX Technologies", "Nucléaire / Défense"),
+        ("UEC", "Uranium Energy Corp", "Uranium"), ("NXE" , "NexGen Energy" , "Uranium"),
+        ("LEU", "Centrus Energy", "Enrichissement nucléaire"), ("CW", "Curtiss-Wright", "Nucléaire / Défense"),
+        ("CEG", "Constellation Energy", "Énergie nucléaire"),
         # Mines d'or
         ("NEM", "Newmont", "Mines d'or"), ("AEM", "Agnico Eagle Mines", "Mines d'or"),
-        ("GOLD", "Barrick Mining (anciennement Barrick Gold)", "Mines d'or"), ("KGC", "Kinross Gold", "Mines d'or"),
+        ("GOLD", "Barrick Mining", "Mines d'or"), ("KGC", "Kinross Gold", "Mines d'or"),
         ("FNV", "Franco-Nevada", "Mines d'or"), ("WPM", "Wheaton Precious Metals", "Mines d'or"),
         ("GFI", "Gold Fields" , "Mines d'or"), ("AU", "AngloGold Ashanti", "Mines d'or"),
         ("6181.HK", "Laopu Gold", "Bijouterie / Or"),
         # Pharma / Biotech
         ("207940.KS", "Samsung Biologics", "Biotech"), ("SAN.PA", "Sanofi", "Pharma"),
-        ("NVO", "Novo Nordisk (ADR)", "Pharma"), ("LLY", "Eli Lilly", "Pharma"),
-        ("IPN.PA", "Ipsen (biopharma)", "Pharma"), ("GNFT.PA", "Genfit (biotech, maladies du foie)", "Biotech"), 
-        ("NANO.PA", "Nanobiotix (biotech, oncologie)", "Biotech"),
+        ("NVO", "Novo Nordisk", "Pharma"), ("LLY", "Eli Lilly", "Pharma"),
+        ("IPN.PA", "Ipsen", "Pharma"), ("GNFT.PA", "Genfit", "Biotech"), 
+        ("NANO.PA", "Nanobiotix", "Biotech"),
         # Financières / bourses
         ("JPM", "JPMorgan Chase", "Banque"), ("GS", "Goldman Sachs", "Banque"),
-        ("MS", "Morgan Stanley", "Banque"), ("MSCI", "MSCI (indices boursiers, données financières)", "Indices / Data financière"),
-        ("ENX.PA", "Euronext (opérateur boursier)", "Bourse"), ("LSEG.L", "LSE Group (opérateur boursier de Londres)", "Bourse"),
-        ("G.MI", "Generali (assurance italienne)", "Assurance"), ("ALV.DE", "Allianz (assurance allemande)", "Assurance"),
-        ("BLK", "BlackRock", "Gestion d'actifs"), ("MUFG", "Mitsubishi UFJ Financial (ADR)", "Banque"),
+        ("MS", "Morgan Stanley", "Banque"), ("MSCI", "MSCI", "Indices / Data financière"),
+        ("ENX.PA", "Euronext", "Bourse"), ("LSEG.L", "LSE Group (opérateur boursier de Londres)", "Bourse"),
+        ("G.MI", "Generali", "Assurance"), ("ALV.DE", "Allianz", "Assurance"),
+        ("BLK", "BlackRock", "Gestion d'actifs"), ("MUFG", "Mitsubishi UFJ Financial", "Banque"),
         ("V", "Visa", "Paiements"), ("MA", "Mastercard", "Paiements"),
         # Chine
         ("0700.HK", "Tencent Holdings", "Internet / Gaming"), ("BABA", "Alibaba (ADR)", "E-commerce / Cloud"),
