@@ -658,7 +658,7 @@ def load_priority_watchlist() -> pd.DataFrame:
         ("SONY", "Sony Group (ADR)", "Electronique"),
         ("LITE", "Lumentum Holdings", "Optique / Composants"), ("AMBA", "Ambarella", "Semi-conducteurs"),
         ("DELL", "Dell Technologies", "Matériel informatique"), ("COHR", "Coherent Corp.", "Optique / Composants"),
-        ("HPQ", "HP Inc.", "Matériel informatique"), ("QCOM", "Qualcomm Inc.", "Semi-conducteurs")
+        ("HPQ", "HP Inc.", "Matériel informatique"), ("QCOM", "Qualcomm Inc.", "Semi-conducteurs"),
         # Luxe / conso France
         ("KER.PA", "Kering", "Luxe"), ("MC.PA", "LVMH", "Luxe"), ("RMS.PA", "Hermès", "Luxe"),
         ("EL.PA", "EssilorLuxottica", "Luxe"), ("OR.PA", "L'Oréal", "Luxe"),
@@ -670,7 +670,7 @@ def load_priority_watchlist() -> pd.DataFrame:
         # Energie / uranium / défense nucléaire
         ("TTE.PA", "TotalEnergies", "Energie"), ("CCJ", "Cameco", "Uranium"),
         ("BWXT", "BWX Technologies", "Nucléaire / Défense"),
-        ("UEC", "Uranium Energy Corp", "Uranium"), ("NXE" , "NexGen Energy" , "Uranium"),
+        ("UEC", "Uranium Energy Corp", "Uranium"), ("NXE" , "NexGen Energy", "Uranium"),
         ("LEU", "Centrus Energy", "Enrichissement nucléaire"), ("CW", "Curtiss-Wright", "Nucléaire / Défense"),
         ("CEG", "Constellation Energy", "Énergie nucléaire"),
         # Mines d'or
