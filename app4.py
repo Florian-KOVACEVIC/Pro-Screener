@@ -36,7 +36,6 @@ from plotly.subplots import make_subplots
 def _build_favicon() -> Image.Image:
     """Construit l'icône d'onglet du navigateur sous forme d'image bitmap,
     avec le même dégradé rouge/orangé que la police des titres.
-
     Un simple caractère Unicode ('▣') passé à page_icon dépend du support
     emoji/police du navigateur et ne s'affiche pas de façon fiable partout :
     on dessine donc l'icône nous-mêmes, ce qui garantit un rendu identique
@@ -701,33 +700,33 @@ MARKETS: dict[str, MarketConfig] = {
     "dow30": MarketConfig(
         "dow30", "Dow Jones 30 (États-Unis)", load_dow30, "", "$", "Industrie", is_curated=True,
         note="Composition codée en dur (le scraping Wikipedia s'est révélé trop instable). Indice très "
-             "stable (peu de rotations par an), confiance élevée sur cette liste.",
+             "stable en rotations.",
     ),
     "cac40": MarketConfig(
-        "cac40", "CAC 40, grandes capitalisations (France)", load_cac40_leaders, "", "€", "Secteur", is_curated=True,
+        "cac40", "CAC 40 · Grandes capitalisations (France)", load_cac40_leaders, "", "€", "Secteur", is_curated=True,
         note="Sélection maison des principales valeurs du CAC 40, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
     ),
     "dax40": MarketConfig(
-        "dax40", "DAX 40, grandes capitalisations (Allemagne)", load_dax40_leaders, "", "€", "Secteur", is_curated=True,
+        "dax40", "DAX 40 · Grandes capitalisations (Allemagne)", load_dax40_leaders, "", "€", "Secteur", is_curated=True,
         note="Sélection maison des principales valeurs du DAX 40, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
     ),
     "sx5e": MarketConfig(
-        "sx5e", "Euro Stoxx 50, SX5E (Zone euro)", load_sx5e_leaders, "", "€", "Secteur", is_curated=True,
+        "sx5e", "Euro Stoxx 50 · SX5E (Zone euro)", load_sx5e_leaders, "", "€", "Secteur", is_curated=True,
         note="Sélection maison proche de la composition du EURO STOXX 50, liste non exhaustive.",
     ),
     "ftse100": MarketConfig("ftse100", "FTSE 100 (Royaume-Uni)", load_ftse100, ".L", "£", "Secteur"),
     "nikkei225": MarketConfig(
-        "nikkei225", "Nikkei 225, grandes capitalisations (Japon)", load_nikkei_leaders, "", "¥", "Secteur", is_curated=True,
+        "nikkei225", "Nikkei 225 · Grandes capitalisations (Japon)", load_nikkei_leaders, "", "¥", "Secteur", is_curated=True,
         note="Sélection maison des principales valeurs du Nikkei 225, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
     ),
     "hangseng": MarketConfig("hangseng", "Hang Seng (Hong Kong)", load_hangseng, ".HK", "HK$", "Secteur"),
     "kospi": MarketConfig(
-        "kospi", "Kospi, grandes capitalisations (Corée)", load_kospi_leaders, "", "₩", "Secteur", is_curated=True,
+        "kospi", "Kospi · Grandes capitalisations (Corée)", load_kospi_leaders, "", "₩", "Secteur", is_curated=True,
         note="Sélection maison d'une trentaine de grandes valeurs : le KOSPI compte environ 800 sociétés "
              "cotées au total, cette liste n'en couvre qu'une petite partie.",
     ),
     "asia_tech": MarketConfig(
-        "asia_tech", "Asie, leaders tech", load_asia_tech_leaders, "", "$", "Pays / Thématique", is_curated=True,
+        "asia_tech", "Asie · Leaders de la Tech", load_asia_tech_leaders, "", "$", "Pays / Thématique", is_curated=True,
         note="Sélection maison de grandes valeurs technologiques asiatiques (Japon, Corée, Taïwan, Chine).",
     ),
     "priority": MarketConfig(
