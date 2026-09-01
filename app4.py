@@ -453,25 +453,62 @@ def load_dow30() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
-@st.cache_data(ttl=86400, show_spinner=False)
-def load_ftse100() -> pd.DataFrame:
-    t = _best_wiki_table("https://en.wikipedia.org/wiki/FTSE_100_Index", ["ticker", "epic"], ["company", "name"])
-    return _standardize(t, ["ticker", "epic"], ["company", "name"], ["sector", "industry", "ftse industry"], clean_dot=False)
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def load_hangseng() -> pd.DataFrame:
-    t = _best_wiki_table("https://en.wikipedia.org/wiki/Hang_Seng_Index", ["ticker", "sehk", "code", "symbol"], ["constituent", "company", "name"])
-    df = _standardize(t, ["ticker", "sehk", "code", "symbol"], ["constituent", "company", "name"], ["sector", "industry"], clean_dot=False)
-    df["Symbol"] = df["Symbol"].str.extract(r"(\d+)")[0].str.zfill(4)
-    return df.dropna(subset=["Symbol"]).drop_duplicates(subset="Symbol").reset_index(drop=True)
-
 # ---- Listes curées (explicitement non-officielles, usage illustratif) -----
-# CAC 40, DAX 40 et Nikkei 225 sont ici en liste curée plutôt qu'en scraping
-# Wikipedia en direct : ces trois pages se sont montrées peu fiables en
-# pratique (tableaux absents, colonnes ambiguës, tickers mal formés
-# provoquant l'échec du téléchargement des cours). Une liste maison stable
-# et honnêtement annoncée comme non exhaustive est préférable à une source
-# qui échoue une fois sur deux.
+# CAC 40, DAX 40, Nikkei 225, FTSE 100 et Hang Seng sont ici en liste curée
+# plutôt qu'en scraping Wikipedia en direct : ces pages se sont montrées peu
+# fiables en pratique (tableaux absents, colonnes ambiguës, tickers mal
+# formés provoquant l'échec du téléchargement des cours). Pour FTSE 100 et
+# Hang Seng, la liste ne couvre pas 100% des composants officiels mais vise
+# ~70% en nombre de titres, en priorisant les plus fortes capitalisations
+# (qui pèsent l'essentiel du poids de l'indice) : un bon compromis entre
+# fiabilité totale (zéro dépendance réseau) et représentativité.
+
+def load_ftse100_leaders() -> pd.DataFrame:
+    """Sélection maison des ~70 plus grandes valeurs du FTSE 100 (sur 100
+    composants), triée par capitalisation décroissante. Tickers EPIC bruts ;
+    le suffixe .L est ajouté automatiquement (_ensure_suffix). Certains
+    tickers se terminent déjà par un point sur le LSE (BAE Systems, Aviva,
+    Smith & Nephew, JD Sports, United Utilities, National Grid, BT Group,
+    Taylor Wimpey) : ils sont codés directement avec leur suffixe .L complet
+    pour éviter toute ambiguïté de parsing."""
+    data = [
+        ("AZN", "AstraZeneca", "Santé"), ("SHEL", "Shell", "Énergie"),
+        ("HSBA", "HSBC Holdings", "Finance"), ("ULVR", "Unilever", "Consommation"),
+        ("BP", "BP", "Énergie"), ("RIO", "Rio Tinto", "Matériaux"),
+        ("GSK", "GSK", "Santé"), ("BATS", "British American Tobacco", "Consommation"),
+        ("DGE", "Diageo", "Consommation"), ("REL", "RELX", "Media / Information"),
+        ("LSEG", "London Stock Exchange Group", "Finance / Bourse"), ("GLEN", "Glencore", "Matières premières"),
+        ("NG.L", "National Grid", "Utilities"), ("AAL", "Anglo American", "Matériaux"),
+        ("BARC", "Barclays", "Finance"), ("LLOY", "Lloyds Banking Group", "Finance"),
+        ("PRU", "Prudential", "Assurance"), ("CPG", "Compass Group", "Restauration collective"),
+        ("III", "3i Group", "Capital-investissement"), ("IMB", "Imperial Brands", "Consommation"),
+        ("VOD", "Vodafone Group", "Télécom"), ("BA.L", "BAE Systems", "Défense"),
+        ("STAN", "Standard Chartered", "Finance"), ("NWG", "NatWest Group", "Finance"),
+        ("AV.L", "Aviva", "Assurance"), ("LGEN", "Legal & General", "Assurance"),
+        ("SSE", "SSE", "Énergie / Utilities"), ("CRH", "CRH", "Matériaux"),
+        ("EXPN", "Experian", "Data / Information"), ("FLTR", "Flutter Entertainment", "Jeux / Paris"),
+        ("SGE", "Sage Group", "Logiciel"), ("SN.L", "Smith & Nephew", "Santé"),
+        ("TSCO", "Tesco", "Distribution"), ("JD.L", "JD Sports Fashion", "Distribution"),
+        ("NXT", "Next", "Distribution"), ("WPP", "WPP", "Communication"),
+        ("ITRK", "Intertek Group", "Services / Certification"), ("CCH", "Coca-Cola HBC", "Consommation"),
+        ("ANTO", "Antofagasta", "Matériaux"), ("IHG", "InterContinental Hotels Group", "Hôtellerie"),
+        ("RTO", "Rentokil Initial", "Services"), ("SMIN", "Smiths Group", "Industrie"),
+        ("WEIR", "Weir Group", "Industrie"), ("PSN", "Persimmon", "Construction"),
+        ("BKG", "Berkeley Group", "Construction"), ("HLMA", "Halma", "Industrie / Technologie"),
+        ("SPX", "Spirax Group", "Industrie"), ("DPLM", "Diploma", "Industrie / Distribution"),
+        ("BME", "B&M European Value Retail", "Distribution"), ("ABF", "Associated British Foods", "Consommation"),
+        ("RKT", "Reckitt Benckiser", "Consommation"), ("MNG", "M&G", "Finance / Gestion d'actifs"),
+        ("PHNX", "Phoenix Group Holdings", "Assurance"), ("SVT", "Severn Trent", "Utilities / Eau"),
+        ("UU.L", "United Utilities", "Utilities / Eau"), ("PSON", "Pearson", "Éducation / Media"),
+        ("BT-A.L", "BT Group", "Télécom"), ("SGRO", "Segro", "Immobilier / REIT industriel"),
+        ("LAND", "Land Securities", "Immobilier / REIT"), ("BLND", "British Land", "Immobilier / REIT"),
+        ("ENT", "Entain", "Jeux / Paris"), ("IAG", "International Airlines Group", "Aérien"),
+        ("EZJ", "easyJet", "Aérien"), ("WTB", "Whitbread", "Hôtellerie / Restauration"),
+        ("MKS", "Marks & Spencer", "Distribution"), ("KGF", "Kingfisher", "Distribution / Bricolage"),
+        ("STJ", "St James's Place", "Gestion de patrimoine"), ("ADM", "Admiral Group", "Assurance"),
+        ("SMDS", "Smurfit WestRock", "Emballage"), ("CNA", "Centrica", "Énergie / Utilities"),
+    ]
+    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
 def load_cac40_leaders() -> pd.DataFrame:
     data = [
@@ -545,10 +582,57 @@ def load_sx5e_leaders() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
+def load_hangseng_leaders() -> pd.DataFrame:
+    """Sélection maison des ~70 plus grandes valeurs du Hang Seng (l'indice
+    compte une composition plus large depuis sa réforme, avec un
+    renouvellement non négligeable), triée par capitalisation décroissante :
+    le scraping Wikipedia s'est montré peu fiable pour cet indice. Codes
+    SEHK à 4 chiffres ; le suffixe .HK est ajouté automatiquement par
+    ailleurs (_ensure_suffix)."""
+    data = [
+        ("0700", "Tencent Holdings", "Internet / Jeux vidéo"), ("9988", "Alibaba Group", "E-commerce / Cloud"),
+        ("0941", "China Mobile", "Télécom"), ("0005", "HSBC Holdings", "Finance"),
+        ("1299", "AIA Group", "Assurance"), ("0388", "Hong Kong Exchanges & Clearing", "Finance / Bourse"),
+        ("2318", "Ping An Insurance", "Assurance"), ("3690", "Meituan", "Internet / Livraison"),
+        ("1810", "Xiaomi Corp", "Électronique"), ("9618", "JD.com", "E-commerce"),
+        ("1211", "BYD Company", "Automobile / Batteries"), ("0016", "Sun Hung Kai Properties", "Immobilier"),
+        ("0001", "CK Hutchison Holdings", "Conglomérat"), ("0027", "Galaxy Entertainment Group", "Jeux / Casino"),
+        ("0011", "Hang Seng Bank", "Finance"), ("0002", "CLP Holdings", "Utilities / Énergie"),
+        ("0003", "Hong Kong and China Gas", "Utilities"), ("0006", "Power Assets Holdings", "Utilities"),
+        ("0012", "Henderson Land Development", "Immobilier"), ("0688", "China Overseas Land & Investment", "Immobilier"),
+        ("0883", "CNOOC", "Énergie"), ("0857", "PetroChina", "Énergie"),
+        ("0386", "Sinopec", "Énergie"), ("0762", "China Unicom", "Télécom"),
+        ("1398", "ICBC", "Finance"), ("3988", "Bank of China", "Finance"),
+        ("0939", "China Construction Bank", "Finance"), ("1288", "Agricultural Bank of China", "Finance"),
+        ("2628", "China Life Insurance", "Assurance"), ("0175", "Geely Automobile", "Automobile"),
+        ("2020", "ANTA Sports Products", "Habillement / Sport"), ("9999", "NetEase", "Internet / Jeux vidéo"),
+        ("1024", "Kuaishou Technology", "Internet / Media"), ("0066", "MTR Corporation", "Transport ferroviaire"),
+        ("0823", "Link REIT", "Immobilier / REIT"), ("0669", "Techtronic Industries", "Industrie / Outillage"),
+        ("1109", "China Resources Land", "Immobilier"), ("1113", "CK Asset Holdings", "Immobilier"),
+        ("3968", "China Merchants Bank", "Finance"), ("2388", "BOC Hong Kong Holdings", "Finance"),
+        ("2899", "Zijin Mining Group", "Matières premières"), ("1928", "Sands China", "Jeux / Casino"),
+        ("1929", "Chow Tai Fook Jewellery", "Luxe / Bijouterie"), ("2331", "Li Ning", "Habillement / Sport"),
+        ("2319", "China Mengniu Dairy", "Consommation"), ("0981", "SMIC", "Semi-conducteurs"),
+        ("9961", "Trip.com Group", "Voyage / Internet"), ("9888", "Baidu", "Internet / IA"),
+        ("2382", "Sunny Optical Technology", "Électronique / Optique"), ("2015", "Li Auto", "Automobile / EV"),
+        ("0083", "Sino Land", "Immobilier"), ("0101", "Hang Lung Properties", "Immobilier"),
+        ("0004", "Wharf Holdings", "Immobilier"), ("1997", "Wharf Real Estate Investment Company", "Immobilier"),
+        ("0267", "CITIC Limited", "Conglomérat"), ("0288", "WH Group", "Consommation"),
+        ("1093", "CSPC Pharmaceutical Group", "Santé"), ("1177", "Sino Biopharmaceutical", "Santé"),
+        ("6618", "JD Health International", "Santé / E-commerce"), ("1378", "China Hongqiao Group", "Matériaux"),
+        ("1876", "Budweiser Brewing APAC", "Consommation"), ("9633", "Nongfu Spring", "Consommation"),
+        ("2313", "Shenzhou International", "Habillement / Textile"), ("2688", "ENN Energy", "Énergie"),
+        ("6690", "Haier Smart Home", "Électroménager"), ("6862", "Haidilao International Holding", "Restauration"),
+        ("9868", "XPeng", "Automobile / EV"), ("9866", "NIO", "Automobile / EV"),
+        ("9698", "Kingsoft Corp", "Logiciel / Jeux"), ("6060", "ESR Group", "Immobilier / Logistique"),
+    ]
+    return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
+
 def load_kospi_leaders() -> pd.DataFrame:
     """Sélection maison des plus grandes capitalisations cotées au KOSPI.
     Non exhaustive : Wikipedia ne publie pas de tableau complet et fiable des
-    ~800 composants du KOSPI, contrairement au Nikkei 225 ou au Hang Seng.
+    ~800 composants du KOSPI, contrairement au Nikkei 225 (top 50 dispo) ou
+    au Hang Seng (liste maison d'une soixantaine de valeurs également).
     Confiance moindre que les autres listes maison sur les tickers les plus
     récents (scissions/holdings type SK Square, HD Hyundai) : si l'un d'eux
     est ignoré au chargement (panneau "titres ignorés"), le ticker a
@@ -723,12 +807,20 @@ MARKETS: dict[str, MarketConfig] = {
         "sx5e", "Euro Stoxx 50 · SX5E (Zone euro)", load_sx5e_leaders, "", "€", "Secteur", is_curated=True,
         note="Sélection maison proche de la composition du EURO STOXX 50, liste non exhaustive.",
     ),
-    "ftse100": MarketConfig("ftse100", "FTSE 100 (Royaume-Uni)", load_ftse100, ".L", "£", "Secteur"),
+    "ftse100": MarketConfig(
+        "ftse100", "FTSE 100 · Grandes capitalisations (Royaume-Uni)", load_ftse100_leaders, ".L", "£", "Secteur", is_curated=True,
+        note="Sélection maison des ~70 plus grandes valeurs du FTSE 100 (sur 100 composants), liste non "
+             "exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
+    ),
     "nikkei225": MarketConfig(
         "nikkei225", "Nikkei 225 · Grandes capitalisations (Japon)", load_nikkei_leaders, "", "¥", "Secteur", is_curated=True,
         note="Sélection maison des principales valeurs du Nikkei 225, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
     ),
-    "hangseng": MarketConfig("hangseng", "Hang Seng (Hong Kong)", load_hangseng, ".HK", "HK$", "Secteur"),
+    "hangseng": MarketConfig(
+        "hangseng", "Hang Seng · Grandes capitalisations (Hong Kong)", load_hangseng_leaders, ".HK", "HK$", "Secteur", is_curated=True,
+        note="Sélection maison des ~70 plus grandes valeurs du Hang Seng, liste non exhaustive (le scraping "
+             "Wikipedia s'est montré peu fiable pour cet indice).",
+    ),
     "kospi": MarketConfig(
         "kospi", "Kospi · Grandes capitalisations (Corée)", load_kospi_leaders, "", "₩", "Secteur", is_curated=True,
         note="Sélection maison d'une trentaine de grandes valeurs : le KOSPI compte environ 800 sociétés "
