@@ -485,8 +485,8 @@ def load_ftse100_leaders() -> pd.DataFrame:
         ("VOD", "Vodafone Group", "Télécom"), ("BA.L", "BAE Systems", "Défense"),
         ("STAN", "Standard Chartered", "Finance"), ("NWG", "NatWest Group", "Finance"),
         ("AV.L", "Aviva", "Assurance"), ("LGEN", "Legal & General", "Assurance"),
-        ("SSE", "SSE", "Énergie / Utilities"), ("CRH", "CRH", "Matériaux"),
-        ("EXPN", "Experian", "Data / Information"), ("FLTR", "Flutter Entertainment", "Jeux / Paris"),
+        ("SSE", "SSE", "Énergie / Utilities"),
+        ("EXPN", "Experian", "Data / Information"),
         ("SGE", "Sage Group", "Logiciel"), ("SN.L", "Smith & Nephew", "Santé"),
         ("TSCO", "Tesco", "Distribution"), ("JD.L", "JD Sports Fashion", "Distribution"),
         ("NXT", "Next", "Distribution"), ("WPP", "WPP", "Communication"),
@@ -498,7 +498,7 @@ def load_ftse100_leaders() -> pd.DataFrame:
         ("SPX", "Spirax Group", "Industrie"), ("DPLM", "Diploma", "Industrie / Distribution"),
         ("BME", "B&M European Value Retail", "Distribution"), ("ABF", "Associated British Foods", "Consommation"),
         ("RKT", "Reckitt Benckiser", "Consommation"), ("MNG", "M&G", "Finance / Gestion d'actifs"),
-        ("PHNX", "Phoenix Group Holdings", "Assurance"), ("SVT", "Severn Trent", "Utilities / Eau"),
+        ("SVT", "Severn Trent", "Utilities / Eau"),
         ("UU.L", "United Utilities", "Utilities / Eau"), ("PSON", "Pearson", "Éducation / Media"),
         ("BT-A.L", "BT Group", "Télécom"), ("SGRO", "Segro", "Immobilier / REIT industriel"),
         ("LAND", "Land Securities", "Immobilier / REIT"), ("BLND", "British Land", "Immobilier / REIT"),
@@ -506,7 +506,7 @@ def load_ftse100_leaders() -> pd.DataFrame:
         ("EZJ", "easyJet", "Aérien"), ("WTB", "Whitbread", "Hôtellerie / Restauration"),
         ("MKS", "Marks & Spencer", "Distribution"), ("KGF", "Kingfisher", "Distribution / Bricolage"),
         ("STJ", "St James's Place", "Gestion de patrimoine"), ("ADM", "Admiral Group", "Assurance"),
-        ("SMDS", "Smurfit WestRock", "Emballage"), ("CNA", "Centrica", "Énergie / Utilities"),
+        ("CNA", "Centrica", "Énergie / Utilities"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
