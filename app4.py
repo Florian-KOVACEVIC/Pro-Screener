@@ -16,7 +16,12 @@ import math
 import re
 import unicodedata
 import datetime as dt
+import html
+import json
+import random
+import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Optional
 
 import numpy as np
@@ -265,6 +270,21 @@ class MarketConfig:
     group_label: str = "Secteur"
     is_curated: bool = False  # True = liste maison, pas une composition officielle d'indice
     note: str = ""
+    last_verified: str = ""  # date (AAAA-MM-JJ) de dernière relecture manuelle de la liste curée
+
+def _esc(value) -> str:
+    """Échappe une valeur avant insertion dans un bloc `unsafe_allow_html=True`.
+
+    Nécessaire pour toute donnée qui peut provenir, même indirectement, d'une
+    saisie utilisateur : le marché personnalisé permet d'éditer librement les
+    colonnes Nom/Symbol via un data_editor ou un import CSV, sans aucune
+    contrainte de format. Sans échappement, un nom du type
+    `<img src=x onerror=alert(1)>` collé dans la watchlist ou dans un CSV
+    partagé s'exécuterait tel quel dans la page. Les valeurs qui proviennent
+    uniquement de la configuration développeur (ex: `market.label`) n'ont pas
+    besoin de cet échappement, mais l'appliquer partout où un doute existe ne
+    coûte rien."""
+    return html.escape(str(value), quote=True)
 
 def _flatten_cols(df: pd.DataFrame) -> list[str]:
     """Aplati les colonnes (gère le cas où Wikipedia ajoute une ligne d'en-tête
@@ -485,8 +505,8 @@ def load_ftse100_leaders() -> pd.DataFrame:
         ("VOD", "Vodafone Group", "Télécom"), ("BA.L", "BAE Systems", "Défense"),
         ("STAN", "Standard Chartered", "Finance"), ("NWG", "NatWest Group", "Finance"),
         ("AV.L", "Aviva", "Assurance"), ("LGEN", "Legal & General", "Assurance"),
-        ("SSE", "SSE", "Énergie / Utilities"),
-        ("EXPN", "Experian", "Data / Information"),
+        ("SSE", "SSE", "Énergie / Utilities"), ("CRH", "CRH", "Matériaux"),
+        ("EXPN", "Experian", "Data / Information"), ("FLTR", "Flutter Entertainment", "Jeux / Paris"),
         ("SGE", "Sage Group", "Logiciel"), ("SN.L", "Smith & Nephew", "Santé"),
         ("TSCO", "Tesco", "Distribution"), ("JD.L", "JD Sports Fashion", "Distribution"),
         ("NXT", "Next", "Distribution"), ("WPP", "WPP", "Communication"),
@@ -498,7 +518,7 @@ def load_ftse100_leaders() -> pd.DataFrame:
         ("SPX", "Spirax Group", "Industrie"), ("DPLM", "Diploma", "Industrie / Distribution"),
         ("BME", "B&M European Value Retail", "Distribution"), ("ABF", "Associated British Foods", "Consommation"),
         ("RKT", "Reckitt Benckiser", "Consommation"), ("MNG", "M&G", "Finance / Gestion d'actifs"),
-        ("SVT", "Severn Trent", "Utilities / Eau"),
+        ("PHNX", "Phoenix Group Holdings", "Assurance"), ("SVT", "Severn Trent", "Utilities / Eau"),
         ("UU.L", "United Utilities", "Utilities / Eau"), ("PSON", "Pearson", "Éducation / Media"),
         ("BT-A.L", "BT Group", "Télécom"), ("SGRO", "Segro", "Immobilier / REIT industriel"),
         ("LAND", "Land Securities", "Immobilier / REIT"), ("BLND", "British Land", "Immobilier / REIT"),
@@ -506,7 +526,7 @@ def load_ftse100_leaders() -> pd.DataFrame:
         ("EZJ", "easyJet", "Aérien"), ("WTB", "Whitbread", "Hôtellerie / Restauration"),
         ("MKS", "Marks & Spencer", "Distribution"), ("KGF", "Kingfisher", "Distribution / Bricolage"),
         ("STJ", "St James's Place", "Gestion de patrimoine"), ("ADM", "Admiral Group", "Assurance"),
-        ("CNA", "Centrica", "Énergie / Utilities"),
+        ("SMDS", "Smurfit WestRock", "Emballage"), ("CNA", "Centrica", "Énergie / Utilities"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
@@ -798,28 +818,34 @@ MARKETS: dict[str, MarketConfig] = {
     "cac40": MarketConfig(
         "cac40", "CAC 40 · Grandes capitalisations (France)", load_cac40_leaders, "", "€", "Secteur", is_curated=True,
         note="Sélection maison des principales valeurs du CAC 40, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
+        last_verified="2026-09-05",
     ),
     "dax40": MarketConfig(
         "dax40", "DAX 40 · Grandes capitalisations (Allemagne)", load_dax40_leaders, "", "€", "Secteur", is_curated=True,
         note="Sélection maison des principales valeurs du DAX 40, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
+        last_verified="2026-09-05",
     ),
     "sx5e": MarketConfig(
         "sx5e", "Euro Stoxx 50 · SX5E (Zone euro)", load_sx5e_leaders, "", "€", "Secteur", is_curated=True,
         note="Sélection maison proche de la composition du EURO STOXX 50, liste non exhaustive.",
+        last_verified="2026-09-05",
     ),
     "ftse100": MarketConfig(
         "ftse100", "FTSE 100 · Grandes capitalisations (Royaume-Uni)", load_ftse100_leaders, ".L", "£", "Secteur", is_curated=True,
         note="Sélection maison des ~70 plus grandes valeurs du FTSE 100 (sur 100 composants), liste non "
              "exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
+        last_verified="2026-09-05",
     ),
     "nikkei225": MarketConfig(
         "nikkei225", "Nikkei 225 · Grandes capitalisations (Japon)", load_nikkei_leaders, "", "¥", "Secteur", is_curated=True,
         note="Sélection maison des principales valeurs du Nikkei 225, liste non exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
+        last_verified="2026-09-05",
     ),
     "hangseng": MarketConfig(
         "hangseng", "Hang Seng · Grandes capitalisations (Hong Kong)", load_hangseng_leaders, ".HK", "HK$", "Secteur", is_curated=True,
         note="Sélection maison des ~70 plus grandes valeurs du Hang Seng, liste non exhaustive (le scraping "
              "Wikipedia s'est montré peu fiable pour cet indice).",
+        last_verified="2026-09-05",
     ),
     "kospi": MarketConfig(
         "kospi", "Kospi · Grandes capitalisations (Corée)", load_kospi_leaders, "", "₩", "Secteur", is_curated=True,
@@ -940,6 +966,74 @@ def compute_score(rsi, price, boll_low, boll_mid, vol_ratio, macd_hist_prev, mac
 
     return int(round(min(max(score, 0.0), 100.0)))
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def compute_score_backtest(market_key: str, tickers: tuple, _histories: dict, horizon_days: int = 5,
+                            max_stocks: int = 80) -> pd.DataFrame:
+    """Rejoue le score jour par jour sur l'historique déjà téléchargé, en
+    n'utilisant à chaque instant t que les données disponibles jusqu'à t
+    (aucune anticipation) : les indicateurs de compute_indicators sont déjà
+    causaux (rolling/ewm), seul le "plus bas de la période" doit être
+    recalculé en fenêtre glissante (expanding().min()) plutôt qu'avec
+    close.min() sur toute la série, qui inclurait sinon le futur.
+
+    Mesure ensuite le rendement réellement observé `horizon_days` séances
+    plus tard, et agrège par tranche de score (0-19, 20-39, ..., 80-100) :
+    un score utile devrait montrer un rendement moyen et un taux de hausse
+    croissants avec la tranche.
+
+    `market_key` et `tickers` (hashables) forment la clé de cache effective ;
+    `_histories` (préfixe underscore) est exclu du hachage par Streamlit
+    (dict de DataFrames non hashable), d'où la nécessité des deux premiers
+    paramètres pour invalidation correcte du cache au changement de marché.
+    `max_stocks` borne le coût de calcul sur les très gros univers."""
+    records = []
+    for ticker in list(tickers)[:max_stocks]:
+        df_s = _histories.get(ticker)
+        if df_s is None or len(df_s) < 40:
+            continue
+        close = df_s["Close"]
+        n = len(df_s)
+        ind = compute_indicators(df_s)
+        rsi, boll_low, sma20 = ind["rsi"], ind["boll_low"], ind["sma20"]
+        vol_ratio, macd_hist = ind["vol_ratio"], ind["macd_hist"]
+        expanding_min = close.expanding().min()
+
+        for t in range(30, n - horizon_days):
+            last_p, prev_p = float(close.iloc[t]), float(close.iloc[t - 1])
+            if not prev_p:
+                continue
+            var_day = (last_p - prev_p) / prev_p * 100
+            var_5d = (last_p - float(close.iloc[t - 5])) / float(close.iloc[t - 5]) * 100 if t >= 5 and close.iloc[t - 5] else np.nan
+            plow = float(expanding_min.iloc[t])
+            pct_from_low = (last_p - plow) / plow * 100 if plow else np.nan
+            macd_prev = macd_hist.iloc[t - 1] if t >= 1 else np.nan
+            macd_last = macd_hist.iloc[t]
+
+            score_t = compute_score(rsi.iloc[t], last_p, boll_low.iloc[t], sma20.iloc[t], vol_ratio.iloc[t],
+                                     macd_prev, macd_last, pct_from_low, var_day, var_5d)
+
+            future_p = float(close.iloc[t + horizon_days])
+            if last_p:
+                records.append({"score": score_t, "fwd_return": (future_p - last_p) / last_p * 100})
+
+    cols = ["Tranche de score", "Occurrences", "Rendement moyen (%)", "Taux de hausse (%)"]
+    if not records:
+        return pd.DataFrame(columns=cols)
+
+    bt = pd.DataFrame(records)
+    bins = [0, 20, 40, 60, 80, 101]
+    labels = ["0-19", "20-39", "40-59", "60-79", "80-100"]
+    bt["bucket"] = pd.cut(bt["score"], bins=bins, labels=labels, right=False)
+    agg = bt.groupby("bucket", observed=True)["fwd_return"].agg(
+        Occurrences="size", **{"Rendement moyen (%)": "mean"}
+    )
+    agg["Taux de hausse (%)"] = bt.groupby("bucket", observed=True)["fwd_return"].apply(lambda s: (s > 0).mean() * 100)
+    agg = agg.reset_index().rename(columns={"bucket": "Tranche de score"})
+    agg["Rendement moyen (%)"] = agg["Rendement moyen (%)"].round(2)
+    agg["Taux de hausse (%)"] = agg["Taux de hausse (%)"].round(1)
+    agg["Occurrences"] = agg["Occurrences"].astype(int)
+    return agg[cols]
+
 # ══════════════════════════════════════════════════════════════════════════
 # 4. PIPELINE DE RÉCUPÉRATION & D'ANALYSE
 # ══════════════════════════════════════════════════════════════════════════
@@ -954,75 +1048,112 @@ def _extract_frame(data: pd.DataFrame, symbol: str, n_tickers: int) -> pd.DataFr
         return data[symbol].dropna()
     return data.dropna()
 
+BATCH_SIZE = 60      # nombre de tickers par appel yfinance : limite le risque de rate-limit Yahoo
+MAX_RETRIES = 3       # tentatives par lot avant abandon
+BASE_BACKOFF_S = 1.5  # délai de base (secondes), doublé à chaque tentative + petit aléa (jitter)
+
+def _download_batch_with_retry(batch: list[str]) -> tuple[Optional[pd.DataFrame], Optional[str]]:
+    """Télécharge un lot de tickers avec retry + backoff exponentiel (+jitter).
+    Isoler les lots permet à un rate-limit ou un incident réseau ponctuel de
+    ne faire échouer qu'une fraction de l'univers plutôt que l'analyse
+    entière : voir fetch_and_analyze, qui traite chaque lot indépendamment."""
+    last_error = "raison inconnue"
+    for attempt in range(MAX_RETRIES):
+        try:
+            data = yf.download(batch, period="1y", interval="1d", group_by="ticker",
+                                auto_adjust=True, threads=True, progress=False)
+            if data is not None and not data.empty:
+                return data, None
+            last_error = "aucune donnée renvoyée par Yahoo Finance"
+        except Exception as e:  # réseau, rate-limit, etc.
+            last_error = str(e)
+        if attempt < MAX_RETRIES - 1:
+            time.sleep(BASE_BACKOFF_S * (2 ** attempt) + random.uniform(0, 0.5))
+    return None, last_error
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, groups_map: dict):
     """Télécharge l'historique (1 an) de chaque titre et calcule les
-    indicateurs + le score d'opportunité. Retourne (DataFrame, erreur|None)."""
-    n = len(symbols)
-    try:
-        data = yf.download(symbols, period="1y", interval="1d", group_by="ticker",
-                            auto_adjust=True, threads=True, progress=False)
-    except Exception as e:  # réseau, rate-limit, etc.
-        return pd.DataFrame(), f"{e}", []
+    indicateurs + le score d'opportunité. Retourne (DataFrame, erreur|None).
 
-    if data is None or data.empty:
-        return pd.DataFrame(), "Aucune donnée reçue (tickers invalides ou délistés, limite de requêtes Yahoo Finance, ou accès réseau restreint).", []
-
+    Le téléchargement est découpé en lots de BATCH_SIZE tickers, chacun avec
+    retry + backoff : un rate-limit ou un incident réseau sur un lot ne fait
+    plus échouer l'analyse de tout l'univers, seulement celle du lot
+    concerné (les titres correspondants apparaissent alors dans les
+    "titres ignorés" avec la raison précise, plutôt que de tout perdre)."""
+    batches = [symbols[i:i + BATCH_SIZE] for i in range(0, len(symbols), BATCH_SIZE)]
     rows = []
     skipped = []  # (symbol, raison) : rendu visible dans l'UI plutôt que silencieusement perdu
-    for symbol in symbols:
-        try:
-            df_s = _extract_frame(data, symbol, n)
-            if len(df_s) == 0:
-                skipped.append((symbol, "aucune donnée renvoyée par Yahoo Finance"))
-                continue
-            if "Close" not in df_s.columns:
-                skipped.append((symbol, "données incomplètes (colonne Close absente)"))
-                continue
-            if len(df_s) < 30:
-                skipped.append((symbol, f"historique trop court ({len(df_s)} séances, 30 minimum)"))
-                continue
+    any_batch_ok = False
 
-            close = df_s["Close"]
-            last_p, prev_p = float(close.iloc[-1]), float(close.iloc[-2])
-            var_day = (last_p - prev_p) / prev_p * 100
-            var_5d = (last_p - float(close.iloc[-5])) / float(close.iloc[-5]) * 100 if len(close) >= 5 else np.nan
-
-            ind = compute_indicators(df_s)
-            rsi = ind["rsi"].iloc[-1]
-            boll_low = ind["boll_low"].iloc[-1]
-            boll_mid = ind["sma20"].iloc[-1]
-            vol_ratio = ind["vol_ratio"].iloc[-1]
-            macd_hist = ind["macd_hist"]
-            macd_prev = macd_hist.iloc[-2] if len(macd_hist) >= 2 else np.nan
-            macd_last = macd_hist.iloc[-1]
-
-            period_low = float(close.min())
-            pct_from_low = (last_p - period_low) / period_low * 100 if period_low else np.nan
-
-            score = compute_score(rsi, last_p, boll_low, boll_mid, vol_ratio, macd_prev, macd_last,
-                                   pct_from_low, var_day, var_5d)
-
-            rows.append({
-                "Ticker": symbol,
-                "Nom": shorten_name(names_map.get(symbol, symbol)),
-                "Groupe": shorten_sector(groups_map.get(symbol, "N/A")),
-                "Prix": round(last_p, 2),
-                "Var. 1J (%)": round(var_day, 2),
-                "Var. 5J (%)": round(var_5d, 2) if pd.notna(var_5d) else None,
-                "RSI (14)": round(float(rsi), 1) if pd.notna(rsi) else None,
-                "Sous Bollinger": bool(pd.notna(boll_low) and last_p <= boll_low),
-                "Ratio Vol.": round(float(vol_ratio), 2) if pd.notna(vol_ratio) else None,
-                "% vs Bas (période)": round(pct_from_low, 1) if pd.notna(pct_from_low) else None,
-                "MACD haussier": bool(pd.notna(macd_prev) and pd.notna(macd_last) and macd_prev <= 0 and macd_last > 0),
-                "Devise": infer_currency(symbol),
-                "Score Opp.": score,
-                "_history": df_s,
-            })
-        except Exception as e:
-            skipped.append((symbol, f"erreur inattendue : {e}"))
+    for batch in batches:
+        data, batch_error = _download_batch_with_retry(batch)
+        if data is None:
+            for symbol in batch:
+                skipped.append((symbol, f"échec de téléchargement après {MAX_RETRIES} tentatives : {batch_error}"))
             continue
+        any_batch_ok = True
+        n = len(batch)
+        for symbol in batch:
+            try:
+                df_s = _extract_frame(data, symbol, n)
+                if len(df_s) == 0:
+                    skipped.append((symbol, "aucune donnée renvoyée par Yahoo Finance"))
+                    continue
+                if "Close" not in df_s.columns:
+                    skipped.append((symbol, "données incomplètes (colonne Close absente)"))
+                    continue
+                if len(df_s) < 30:
+                    skipped.append((symbol, f"historique trop court ({len(df_s)} séances, 30 minimum)"))
+                    continue
 
+                close = df_s["Close"]
+                last_p, prev_p = float(close.iloc[-1]), float(close.iloc[-2])
+                var_day = (last_p - prev_p) / prev_p * 100
+                var_5d = (last_p - float(close.iloc[-5])) / float(close.iloc[-5]) * 100 if len(close) >= 5 else np.nan
+
+                ind = compute_indicators(df_s)
+                rsi = ind["rsi"].iloc[-1]
+                boll_low = ind["boll_low"].iloc[-1]
+                boll_mid = ind["sma20"].iloc[-1]
+                vol_ratio = ind["vol_ratio"].iloc[-1]
+                macd_hist = ind["macd_hist"]
+                macd_prev = macd_hist.iloc[-2] if len(macd_hist) >= 2 else np.nan
+                macd_last = macd_hist.iloc[-1]
+
+                period_low = float(close.min())
+                pct_from_low = (last_p - period_low) / period_low * 100 if period_low else np.nan
+
+                score = compute_score(rsi, last_p, boll_low, boll_mid, vol_ratio, macd_prev, macd_last,
+                                       pct_from_low, var_day, var_5d)
+
+                rows.append({
+                    "Ticker": symbol,
+                    "Nom": shorten_name(names_map.get(symbol, symbol)),
+                    "Groupe": shorten_sector(groups_map.get(symbol, "N/A")),
+                    "Prix": round(last_p, 2),
+                    "Var. 1J (%)": round(var_day, 2),
+                    "Var. 5J (%)": round(var_5d, 2) if pd.notna(var_5d) else None,
+                    "RSI (14)": round(float(rsi), 1) if pd.notna(rsi) else None,
+                    "Sous Bollinger": bool(pd.notna(boll_low) and last_p <= boll_low),
+                    "Ratio Vol.": round(float(vol_ratio), 2) if pd.notna(vol_ratio) else None,
+                    "% vs Bas (période)": round(pct_from_low, 1) if pd.notna(pct_from_low) else None,
+                    "MACD haussier": bool(pd.notna(macd_prev) and pd.notna(macd_last) and macd_prev <= 0 and macd_last > 0),
+                    "Devise": infer_currency(symbol),
+                    "Score Opp.": score,
+                    "_history": df_s,
+                })
+            except Exception as e:
+                skipped.append((symbol, f"erreur inattendue : {e}"))
+                continue
+
+    if not any_batch_ok:
+        return (
+            pd.DataFrame(),
+            "Aucune donnée reçue après plusieurs tentatives, sur tous les lots de téléchargement "
+            "(tickers invalides ou délistés, limite de requêtes Yahoo Finance, ou accès réseau restreint).",
+            skipped,
+        )
     return pd.DataFrame(rows), None, skipped
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -1081,8 +1212,8 @@ def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> N
     st.markdown(
         f'<div class="opp-card-shell">'
         f'<div class="opp-rank">{rank_label}</div>'
-        f'<div class="opp-name">{row["Nom"]}</div>'
-        f'<div class="opp-ticker">{row["Ticker"]}</div>'
+        f'<div class="opp-name">{_esc(row["Nom"])}</div>'
+        f'<div class="opp-ticker">{_esc(row["Ticker"])}</div>'
         f'<div class="opp-price">{currency}{row["Prix"]:.2f}</div>'
         f'<div>{badges}</div>'
         f'{gauge_svg}'
@@ -1384,6 +1515,34 @@ def slice_by_range(df: pd.DataFrame, range_key: str) -> pd.DataFrame:
 # ══════════════════════════════════════════════════════════════════════════
 # 5. SIDEBAR : SELECTION DU MARCHE ET FILTRES
 # ══════════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════════
+# 5B. PERSISTANCE LOCALE DE LA WATCHLIST PERSONNALISÉE
+# ══════════════════════════════════════════════════════════════════════════
+# La watchlist "Marché personnalisé" ne vivait qu'en session_state : fermer
+# l'onglet (ou un simple redémarrage du serveur) la faisait disparaître sauf
+# export CSV manuel. On la sauvegarde maintenant aussi dans un petit fichier
+# local, rechargé automatiquement au démarrage. Purement best-effort : sur un
+# hébergement au système de fichiers en lecture seule ou éphémère, l'écriture
+# échoue silencieusement et l'app se comporte comme avant (session uniquement).
+MAX_WATCHLIST = 150  # au-delà, le téléchargement yfinance devient lent et plus sujet aux rate-limits
+_WATCHLIST_FILE = Path(__file__).resolve().parent / ".custom_watchlist.json"
+
+def _load_watchlist_from_disk() -> list[dict]:
+    try:
+        if _WATCHLIST_FILE.exists():
+            data = json.loads(_WATCHLIST_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                return data[:MAX_WATCHLIST]
+    except Exception:
+        pass
+    return []
+
+def _save_watchlist_to_disk(watchlist: list[dict]) -> None:
+    try:
+        _WATCHLIST_FILE.write_text(json.dumps(watchlist, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass  # confort, pas une garantie : on ne casse jamais l'app pour un échec d'écriture
+
 st.sidebar.markdown('<div class="sidebar-title">Marché et univers</div>', unsafe_allow_html=True)
 market_key = st.sidebar.selectbox(
     "Marché à analyser", list(MARKETS.keys()), format_func=lambda k: MARKETS[k].label,
@@ -1391,9 +1550,12 @@ market_key = st.sidebar.selectbox(
 market = MARKETS[market_key]
 if market.note:
     st.sidebar.caption(f"ℹ️ {market.note}")
+if market.is_curated and market.last_verified:
+    st.sidebar.caption(f"🗓️ Composition relue manuellement le {market.last_verified} — à revérifier périodiquement.")
 
 if market.key == "custom":
-    st.session_state.setdefault("custom_watchlist", [])
+    if "custom_watchlist" not in st.session_state:
+        st.session_state["custom_watchlist"] = _load_watchlist_from_disk()
 
     with st.sidebar.form("add_ticker_form", clear_on_submit=True, border=False):
         query = st.text_input("Ajouter une entreprise (nom ou ticker)", placeholder="ex : Nvidia, MC.PA, BTC-USD")
@@ -1404,8 +1566,15 @@ if market.key == "custom":
             st.sidebar.warning(f"« {query} » non reconnu. Essayez un ticker exact (ex : NVDA, MC.PA).")
         elif resolved_ticker in {r["Symbol"] for r in st.session_state["custom_watchlist"]}:
             st.sidebar.info(f"{resolved_ticker} est déjà dans votre marché.")
+        elif len(st.session_state["custom_watchlist"]) >= MAX_WATCHLIST:
+            st.sidebar.warning(
+                f"Limite de {MAX_WATCHLIST} titres atteinte pour un marché personnalisé (au-delà, le "
+                "téléchargement devient lent et plus sujet aux limites de requêtes de Yahoo Finance). "
+                "Retirez un titre avant d'en ajouter un autre."
+            )
         else:
             st.session_state["custom_watchlist"].append({"Symbol": resolved_ticker, "Nom": resolved_name})
+            _save_watchlist_to_disk(st.session_state["custom_watchlist"])
 
     st.sidebar.file_uploader(
         "Ou recharger un marché déjà enregistré (CSV)", type=["csv"], key="custom_csv_upload",
@@ -1421,10 +1590,15 @@ if market.key == "custom":
             else:
                 if "Nom" not in imported.columns:
                     imported["Nom"] = imported["Symbol"]
-                st.session_state["custom_watchlist"] = (
+                full_list = (
                     imported[["Symbol", "Nom"]].dropna(subset=["Symbol"]).drop_duplicates("Symbol").to_dict("records")
                 )
-                st.sidebar.success(f"{len(st.session_state['custom_watchlist'])} titre(s) rechargé(s) depuis le CSV.")
+                st.session_state["custom_watchlist"] = full_list[:MAX_WATCHLIST]
+                _save_watchlist_to_disk(st.session_state["custom_watchlist"])
+                msg = f"{len(st.session_state['custom_watchlist'])} titre(s) rechargé(s) depuis le CSV."
+                if len(full_list) > MAX_WATCHLIST:
+                    msg += f" (limité à {MAX_WATCHLIST} sur les {len(full_list)} lignes du fichier)."
+                st.sidebar.success(msg)
         except Exception as e:
             st.sidebar.error(f"Fichier CSV illisible : {e}")
 
@@ -1433,7 +1607,15 @@ if market.key == "custom":
         edited_df = st.sidebar.data_editor(
             watchlist_df, hide_index=True, width="stretch", num_rows="dynamic", key="custom_watchlist_editor",
         )
-        st.session_state["custom_watchlist"] = edited_df.dropna(subset=["Symbol"]).to_dict("records")
+        new_watchlist = edited_df.dropna(subset=["Symbol"]).to_dict("records")
+        if len(new_watchlist) > MAX_WATCHLIST:
+            st.sidebar.warning(
+                f"Limite de {MAX_WATCHLIST} titres : les {len(new_watchlist) - MAX_WATCHLIST} lignes "
+                "excédentaires ne seront pas retenues."
+            )
+            new_watchlist = new_watchlist[:MAX_WATCHLIST]
+        st.session_state["custom_watchlist"] = new_watchlist
+        _save_watchlist_to_disk(st.session_state["custom_watchlist"])
 
         csv_bytes = pd.DataFrame(st.session_state["custom_watchlist"]).to_csv(index=False).encode("utf-8")
         st.sidebar.download_button(
@@ -1569,7 +1751,7 @@ tape_items = ""
 for _, r in pd.concat([tape_source.head(15), tape_source.tail(10)]).iterrows():
     cls = "tape-up" if r["Var. 1J (%)"] >= 0 else "tape-down"
     arrow = "▲" if r["Var. 1J (%)"] >= 0 else "▼"
-    tape_items += f'<span class="tape-item">{r["Ticker"]} <span class="{cls}">{arrow} {r["Var. 1J (%)"]:+.2f}%</span></span>'
+    tape_items += f'<span class="tape-item">{_esc(r["Ticker"])} <span class="{cls}">{arrow} {r["Var. 1J (%)"]:+.2f}%</span></span>'
 
 st.markdown(
     f'<div class="tape-wrap"><div class="tape-track">{tape_items}{tape_items}</div></div>',
@@ -1846,7 +2028,7 @@ with tab_chart:
 
         with st.container(border=True):
             st.markdown(
-                f'<div class="panel-title">{name_by_ticker.get(selected_ticker, selected_ticker)} : '
+                f'<div class="panel-title">{_esc(name_by_ticker.get(selected_ticker, selected_ticker))} : '
                 f'prix, volume et RSI</div>',
                 unsafe_allow_html=True,
             )
@@ -1924,7 +2106,42 @@ with tab_about:
         st.markdown('<div class="panel-title">Marchés disponibles</div>', unsafe_allow_html=True)
         for m in MARKETS.values():
             tag = ", liste maison, non-officielle" if m.is_curated else ", composition officielle (Wikipedia, temps réel)"
-            st.markdown(f"- **{m.label}**{tag}")
+            verified = f" · relue le {m.last_verified}" if m.last_verified else ""
+            st.markdown(f"- **{m.label}**{tag}{verified}")
+
+    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Validation empirique du score (sur l\'univers actuel)</div>', unsafe_allow_html=True)
+        st.markdown(
+            "Les poids du score d'opportunité (RSI, Bollinger, momentum, volume, MACD) sont fixés "
+            "à dire d'expert, pas calibrés statistiquement. Le calcul ci-dessous rejoue le score "
+            "**jour par jour, sans aucune anticipation** (chaque score n'utilise que les données "
+            "disponibles à ce jour-là) sur l'historique déjà téléchargé pour le marché actuellement "
+            "sélectionné, et mesure le rendement réellement observé dans les jours suivants. "
+            "Un signal utile devrait montrer un rendement moyen croissant avec la tranche de score — "
+            "mais ce n'est qu'un indice statistique sur un échantillon limité, pas une preuve de "
+            "performance future."
+        )
+        bt_horizon = st.select_slider("Horizon de mesure (séances de bourse)", options=[3, 5, 10, 20], value=5, key="bt_horizon")
+        if st.button("Calculer la validation empirique", key="bt_run"):
+            with st.spinner("Calcul en cours (peut prendre quelques secondes)..."):
+                histories = {r["Ticker"]: r["_history"] for _, r in results_df.iterrows()}
+                bt_result = compute_score_backtest(
+                    market.key, tuple(results_df["Ticker"]), histories, horizon_days=bt_horizon,
+                )
+            st.session_state["bt_result"] = bt_result
+            st.session_state["bt_result_key"] = (market.key, bt_horizon, len(results_df))
+        bt_result = st.session_state.get("bt_result")
+        if bt_result is not None and st.session_state.get("bt_result_key") == (market.key, bt_horizon, len(results_df)):
+            if len(bt_result) == 0:
+                st.info("Pas assez d'historique disponible sur cet univers pour calculer une statistique fiable.")
+            else:
+                st.dataframe(bt_result, hide_index=True, width="stretch")
+                st.caption(
+                    f"Échantillon : jusqu'à {min(80, len(results_df))} titres de « {market.label} », "
+                    f"rendement mesuré {bt_horizon} séances après chaque score calculé. "
+                    "Un nombre d'occurrences faible dans une tranche rend son chiffre peu fiable."
+                )
 
 st.markdown(
     """
