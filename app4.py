@@ -548,6 +548,10 @@ def load_cac40_leaders() -> pd.DataFrame:
         ("DSY.PA", "Dassault Systèmes", "Tech"), ("RI.PA", "Pernod Ricard", "Consommation"),
         ("VIE.PA", "Veolia", "Environnement"), ("ENGI.PA", "Engie", "Énergie"),
         ("ORA.PA", "Orange", "Télécom"), ("STM", "STMicroelectronics", "Semi-conducteurs"),
+        ("ALO.PA", "Alstom", "Transport ferroviaire"), ("MT.PA", "ArcelorMittal", "Matériaux / Acier"),
+        ("BVI.PA", "Bureau Veritas", "Services / Certification"), ("EDEN.PA", "Edenred", "Services prépayés"),
+        ("ERF.PA", "Eurofins Scientific", "Santé / Laboratoires"), ("STLAP.PA", "Stellantis", "Automobile"),
+        ("TEP.PA", "Teleperformance", "Services / Centres d'appels"), ("URW.PA", "Unibail-Rodamco-Westfield", "Immobilier"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
@@ -563,6 +567,16 @@ def load_dax40_leaders() -> pd.DataFrame:
         ("EOAN.DE", "E.ON", "Énergie"), ("DHL.DE", "Deutsche Post DHL Group", "Logistique"),
         ("CON.DE", "Continental", "Automobile"), ("HEN3.DE", "Henkel", "Consommation"),
         ("FRE.DE", "Fresenius", "Santé"), ("VNA.DE", "Vonovia", "Immobilier"),
+        ("AIR.DE", "Airbus (cotation Francfort)", "Aéronautique"), ("BEI.DE", "Beiersdorf", "Consommation"),
+        ("BNR.DE", "Brenntag", "Chimie / Distribution"), ("CBK.DE", "Commerzbank", "Finance"),
+        ("1COV.DE", "Covestro", "Chimie"), ("DTG.DE", "Daimler Truck", "Automobile / Poids lourds"),
+        ("DB1.DE", "Deutsche Börse", "Finance / Bourse"), ("FME.DE", "Fresenius Medical Care", "Santé"),
+        ("HNR1.DE", "Hannover Rück", "Assurance"), ("HEI.DE", "Heidelberg Materials", "Matériaux"),
+        ("MRK.DE", "Merck KGaA", "Santé / Chimie"), ("MTX.DE", "MTU Aero Engines", "Aéronautique"),
+        ("P911.DE", "Porsche AG", "Automobile"), ("QIA.DE", "Qiagen", "Biotech / Diagnostics"),
+        ("RHM.DE", "Rheinmetall", "Défense"), ("SRT3.DE", "Sartorius", "Santé / Equipements"),
+        ("SY1.DE", "Symrise", "Chimie / Arômes"), ("ZAL.DE", "Zalando", "E-commerce"),
+        ("ENR.DE", "Siemens Energy", "Énergie"), ("SHL.DE", "Siemens Healthineers", "Santé"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
@@ -579,6 +593,20 @@ def load_nikkei_leaders() -> pd.DataFrame:
         ("9433.T", "KDDI", "Télécom"), ("9432.T", "Nippon Telegraph and Telephone", "Télécom"),
         ("6098.T", "Recruit Holdings", "Services"), ("6981.T", "Murata Manufacturing", "Électronique"),
         ("4502.T", "Takeda Pharmaceutical", "Santé"), ("7201.T", "Nissan Motor", "Automobile"),
+        ("8316.T", "Sumitomo Mitsui Financial Group", "Finance"), ("8411.T", "Mizuho Financial Group", "Finance"),
+        ("6902.T", "Denso", "Automobile / Équipementier"), ("7011.T", "Mitsubishi Heavy Industries", "Industrie / Défense"),
+        ("6301.T", "Komatsu", "Machines / BTP"), ("4519.T", "Chugai Pharmaceutical", "Santé"),
+        ("4568.T", "Daiichi Sankyo", "Santé"), ("4523.T", "Eisai", "Santé"),
+        ("8801.T", "Mitsui Fudosan", "Immobilier"), ("8802.T", "Mitsubishi Estate", "Immobilier"),
+        ("9020.T", "East Japan Railway (JR East)", "Transport ferroviaire"), ("9022.T", "Central Japan Railway (JR Central)", "Transport ferroviaire"),
+        ("8766.T", "Tokio Marine Holdings", "Assurance"), ("4661.T", "Oriental Land", "Loisirs / Tourisme"),
+        ("6503.T", "Mitsubishi Electric", "Électronique"), ("6702.T", "Fujitsu", "Tech / Services IT"),
+        ("6857.T", "Advantest", "Équipements semi-conducteurs"), ("5108.T", "Bridgestone", "Pneumatiques"),
+        ("4901.T", "Fujifilm Holdings", "Imagerie / Santé"), ("6971.T", "Kyocera", "Électronique"),
+        ("9843.T", "Nitori Holdings", "Distribution / Ameublement"), ("2914.T", "Japan Tobacco", "Consommation"),
+        ("4452.T", "Kao Corp", "Consommation"), ("8267.T", "Aeon", "Distribution"),
+        ("9613.T", "NTT Data Group", "Tech / Services IT"), ("5401.T", "Nippon Steel", "Matériaux / Acier"),
+        ("7269.T", "Suzuki Motor", "Automobile"), ("7270.T", "Subaru Corp", "Automobile"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
@@ -599,6 +627,18 @@ def load_sx5e_leaders() -> pd.DataFrame:
         ("BNP.PA", "BNP Paribas", "Finance"), ("CS.PA", "AXA", "Finance"),
         ("SU.PA", "Schneider Electric", "Industrie"), ("ADS.DE", "Adidas", "Consommation"),
         ("BN.PA", "Danone", "Consommation"), ("SAF.PA", "Safran", "Aéronautique"),
+        ("BAS.DE", "BASF", "Chimie"), ("BAYN.DE", "Bayer", "Santé / Chimie"),
+        ("IFX.DE", "Infineon", "Semi-conducteurs"), ("DB1.DE", "Deutsche Börse", "Finance / Bourse"),
+        ("OR.PA", "L'Oréal", "Consommation"), ("EL.PA", "EssilorLuxottica", "Santé"),
+        ("VNA.DE", "Vonovia", "Immobilier"), ("SHL.DE", "Siemens Healthineers", "Santé"),
+        ("STLAP.PA", "Stellantis", "Automobile"), ("ITX.MC", "Inditex", "Distribution / Habillement"),
+        ("BBVA.MC", "BBVA", "Finance"), ("INGA.AS", "ING Group", "Finance"),
+        ("ADYEN.AS", "Adyen", "Paiements"), ("PRX.AS", "Prosus", "Tech / Investissement"),
+        ("ABI.BR", "Anheuser-Busch InBev", "Consommation / Brasserie"), ("UCG.MI", "UniCredit", "Finance"),
+        ("RACE.MI", "Ferrari", "Automobile / Luxe"), ("AMS.MC", "Amadeus IT Group", "Tech / Voyage"),
+        ("CRH", "CRH plc", "Matériaux"), ("NOKIA.HE", "Nokia", "Télécom / Équipements"),
+        ("NDA-FI.HE", "Nordea Bank", "Finance"), ("WKL.AS", "Wolters Kluwer", "Media / Info"),
+        ("KNEBV.HE", "Kone Corp", "Industrie / Ascenseurs"), ("DHL.DE", "Deutsche Post DHL Group", "Logistique"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
