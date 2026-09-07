@@ -1,7 +1,12 @@
-streamlit>=1.38
+streamlit>=1.55
 pandas>=2.2
 numpy>=1.26
 plotly>=5.22
 requests>=2.32
 yfinance>=0.2.40
 Pillow>=10.3
+requests>=2.31
+lxml>=5.0
+html5lib>=1.1
+beautifulsoup4>=4.12
+openpyxl>=3.1
