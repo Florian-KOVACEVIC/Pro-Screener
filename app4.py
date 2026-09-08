@@ -845,21 +845,52 @@ def load_priority_watchlist() -> pd.DataFrame:
 # Liste des fonctions à agréger — pas les DataFrames, les fonctions elles-mêmes :
 # load_global_selection() les rappelle à chaque exécution, donc tout ticker
 # ajouté plus tard dans l'une d'elles (ex: la Sélection diversifiée) remonte
-# automatiquement ici, sans rien à synchroniser à la main. Volontairement
-# exclu : load_sp500 (scrapé en direct, pas "codé en dur") et le Marché
-# personnalisé (n'a pas de loader, propre à la session de chacun).
+# automatiquement ici. Volontairement exclu : le Marché personnalisé (n'a pas
+# de loader, propre à la session de chacun). Le S&P 500 est ajouté à part
+# (voir load_global_selection) car scrapé en direct plutôt que codé en dur.
 _HARDCODED_LOADERS = [
     load_nasdaq100, load_dow30, load_cac40_leaders, load_dax40_leaders, load_sx5e_leaders,
     load_ftse100_leaders, load_nikkei_leaders, load_hangseng_leaders, load_kospi_leaders,
     load_asia_tech_leaders, load_priority_watchlist, load_crypto_top,
 ]
 
+_LEGAL_SUFFIXES = {"holdings", "holding", "group", "groupe", "corporation", "corp", "company",
+                   "co", "inc", "plc", "sa", "ag", "nv", "ltd", "limited", "spa", "se"}
+
+def _normalize_company_name(name: str) -> str:
+    """Normalise un nom d'entreprise pour repérer les doublons entre listes
+    même quand le ticker diffère (ex : TotalEnergies coté "TTE" à Wall Street
+    et "TTE.PA" à Paris — même entreprise, deux tickers). Suppression par MOT
+    ENTIER des suffixes juridiques usuels, pas par sous-chaîne : un simple
+    `.replace("inc", "")` collisionnerait par exemple "Vinci" et "Visa" (tous
+    deux se retrouveraient réduits à "vi"), d'où la tokenisation."""
+    n = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode()
+    n = re.sub(r"\(.*?\)", "", n)  # retire les mentions entre parenthèses : "(ADR)", "(A)", "(cotation Francfort)"...
+    words = [w for w in re.findall(r"[a-z0-9]+", n.lower()) if w not in _LEGAL_SUFFIXES]
+    return "".join(words)
+
+@st.cache_data(ttl=86400, show_spinner=False)
 def load_global_selection() -> pd.DataFrame:
     """Agrège tous les tickers codés en dur de l'app (voir _HARDCODED_LOADERS)
-    en un seul univers, dédoublonné par ticker (un même titre peut figurer
-    dans plusieurs listes, ex : LVMH dans le CAC 40 et le SX5E)."""
+    ainsi que le S&P 500 (scrapé en direct ; si le scraping échoue, la
+    Sélection Globale reste utilisable avec les seules listes maison plutôt
+    que de tomber en erreur).
+
+    Deux passes de dédoublonnage : par ticker exact d'abord (un même titre
+    peut figurer avec le même symbole dans plusieurs listes, ex : TTE dans le
+    CAC 40 et le SX5E), puis par nom d'entreprise normalisé (pour les cas où
+    le même titre est coté sous des tickers différents selon la place
+    boursière, ex : TTE / TTE.PA). Dans les deux cas, la première occurrence
+    rencontrée (dans l'ordre de _HARDCODED_LOADERS) est conservée."""
     frames = [loader() for loader in _HARDCODED_LOADERS]
-    return pd.concat(frames, ignore_index=True).drop_duplicates(subset="Symbol", keep="first")
+    try:
+        frames.append(load_sp500())
+    except Exception:
+        pass  # Sélection Globale toujours utilisable même si le scraping S&P 500 échoue
+    combined = pd.concat(frames, ignore_index=True).drop_duplicates(subset="Symbol", keep="first")
+    combined["_norm_name"] = combined["Nom"].map(_normalize_company_name)
+    combined = combined.drop_duplicates(subset="_norm_name", keep="first").drop(columns="_norm_name")
+    return combined.reset_index(drop=True)
 
 
 MARKETS: dict[str, MarketConfig] = {
@@ -926,11 +957,12 @@ MARKETS: dict[str, MarketConfig] = {
         note="Sélection maison des cryptos majeures, vérifiez que chaque ticker est bien coté sur Yahoo Finance.",
     ),
     "global": MarketConfig(
-        "global", "🌍 Sélection Globale (toutes les listes maison)", load_global_selection, "", "mixte", "Groupe", is_curated=True,
-        note="Agrège automatiquement tous les tickers codés en dur de l'app (Nasdaq 100, Dow 30, CAC 40, DAX 40, "
-             "SX5E, FTSE 100, Nikkei 225, Hang Seng, Kospi, Asie Tech, Sélection diversifiée, Cryptomonnaies), "
-             "dédoublonnés — hors S&P 500 (scrapé en direct) et Marché personnalisé (propre à votre session). "
-             "Se met à jour toute seule si l'une de ces listes est complétée : rien à synchroniser à la main.",
+        "global", "Sélection Globale (toutes les listes maison + S&P 500)", load_global_selection, "", "mixte", "Groupe", is_curated=True,
+        note="Agrège le Nasdaq 100, le Dow 30, le CAC 40, le DAX 40, le SX5E, le FTSE 100, le Nikkei 225, le "
+             "Hang Seng, le Kospi, l'Asie Tech, la Sélection diversifiée, les Cryptomonnaies, et le S&P 500 "
+             "(scrapé en direct) — hors Marché personnalisé. Dédoublonné par ticker puis par nom d'entreprise "
+             "(ex : TotalEnergies n'apparaît qu'une fois même s'il est listé sous TTE dans une liste et TTE.PA "
+             "dans une autre).",
     ),
     "custom": MarketConfig(
         "custom", "Marché personnalisé", None, "", "$", "Groupe", is_curated=True,
