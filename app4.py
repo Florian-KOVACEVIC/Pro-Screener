@@ -842,6 +842,26 @@ def load_priority_watchlist() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
+# Liste des fonctions à agréger — pas les DataFrames, les fonctions elles-mêmes :
+# load_global_selection() les rappelle à chaque exécution, donc tout ticker
+# ajouté plus tard dans l'une d'elles (ex: la Sélection diversifiée) remonte
+# automatiquement ici, sans rien à synchroniser à la main. Volontairement
+# exclu : load_sp500 (scrapé en direct, pas "codé en dur") et le Marché
+# personnalisé (n'a pas de loader, propre à la session de chacun).
+_HARDCODED_LOADERS = [
+    load_nasdaq100, load_dow30, load_cac40_leaders, load_dax40_leaders, load_sx5e_leaders,
+    load_ftse100_leaders, load_nikkei_leaders, load_hangseng_leaders, load_kospi_leaders,
+    load_asia_tech_leaders, load_priority_watchlist, load_crypto_top,
+]
+
+def load_global_selection() -> pd.DataFrame:
+    """Agrège tous les tickers codés en dur de l'app (voir _HARDCODED_LOADERS)
+    en un seul univers, dédoublonné par ticker (un même titre peut figurer
+    dans plusieurs listes, ex : LVMH dans le CAC 40 et le SX5E)."""
+    frames = [loader() for loader in _HARDCODED_LOADERS]
+    return pd.concat(frames, ignore_index=True).drop_duplicates(subset="Symbol", keep="first")
+
+
 MARKETS: dict[str, MarketConfig] = {
     "sp500": MarketConfig("sp500", "S&P 500 (États-Unis)", load_sp500, "", "$", "Secteur GICS"),
     "nasdaq100": MarketConfig(
@@ -904,6 +924,13 @@ MARKETS: dict[str, MarketConfig] = {
     "crypto": MarketConfig(
         "crypto", "₿ Cryptomonnaies (Top 26)", load_crypto_top, "", "$", "Catégorie", is_curated=True,
         note="Sélection maison des cryptos majeures, vérifiez que chaque ticker est bien coté sur Yahoo Finance.",
+    ),
+    "global": MarketConfig(
+        "global", "🌍 Sélection Globale (toutes les listes maison)", load_global_selection, "", "mixte", "Groupe", is_curated=True,
+        note="Agrège automatiquement tous les tickers codés en dur de l'app (Nasdaq 100, Dow 30, CAC 40, DAX 40, "
+             "SX5E, FTSE 100, Nikkei 225, Hang Seng, Kospi, Asie Tech, Sélection diversifiée, Cryptomonnaies), "
+             "dédoublonnés — hors S&P 500 (scrapé en direct) et Marché personnalisé (propre à votre session). "
+             "Se met à jour toute seule si l'une de ces listes est complétée : rien à synchroniser à la main.",
     ),
     "custom": MarketConfig(
         "custom", "Marché personnalisé", None, "", "$", "Groupe", is_curated=True,
