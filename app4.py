@@ -1615,25 +1615,32 @@ def call_mistral_analysis(stock_row: pd.Series, pe: Optional[float], range_label
         "prix futur, et rappelle en une phrase que ce sont des signaux techniques de court terme, pas un "
         "conseil en investissement."
     )
-    try:
-        resp = requests.post(
-            "https://api.mistral.ai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model": "mistral-small-latest",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": contexte},
-                ],
-                "temperature": 0.3,
-                "max_tokens": 350,
-            },
-            timeout=20,
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        return f"Analyse indisponible : {e}"
+    payload = {
+        "model": "mistral-small-latest",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": contexte},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 350,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    last_error = None
+    for attempt in range(3):
+        try:
+            resp = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=payload, timeout=20)
+            if resp.status_code == 429:
+                last_error = "limite de requêtes atteinte (429)"
+                if attempt < 2:
+                    time.sleep(2 * (attempt + 1))  # 2s puis 4s
+                    continue
+                return "Limite de requêtes API Mistral atteinte. Réessayez dans quelques instants."
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            last_error = str(e)
+            break
+    return f"Analyse indisponible : {last_error}"
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_chart_history(ticker: str) -> pd.DataFrame:
@@ -2229,14 +2236,20 @@ with tab_chart:
         )
         st.markdown(f'<div class="kpi-grid">{chart_kpi_html}</div>', unsafe_allow_html=True)
 
-        st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
-        if st.button("Analyser", key=f"analyser_{selected_ticker}"):
+        st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+        _, btn_col, _ = st.columns([2, 2, 2])
+        with btn_col:
+            analyser_clicked = st.button(
+                "Analyser", key=f"analyser_{selected_ticker}", type="primary", width="stretch",
+            )
+        if analyser_clicked:
             with st.spinner("Analyse en cours..."):
                 st.session_state[f"analyse_{selected_ticker}"] = call_mistral_analysis(
                     stock_row, pe_chart, range_labels[selected_range], range_pct
                 )
         analyse_txt = st.session_state.get(f"analyse_{selected_ticker}")
         if analyse_txt:
+            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
             with st.container(border=True):
                 st.markdown('<div class="panel-title">Analyse</div>', unsafe_allow_html=True)
                 st.markdown(analyse_txt)
