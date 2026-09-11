@@ -1581,10 +1581,8 @@ def fetch_pe_ratio(ticker: str):
     except Exception:
         return None
 
-def call_mistral_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str, range_pct: Optional[float]) -> str:
-    """Envoie au modèle uniquement les indicateurs déjà calculés (pas
-    d'historique brut) : peu de tokens, coût minime par appel. La clé API
-    vient de st.secrets, jamais codée en dur ici — voir .streamlit/secrets.toml."""
+def call_gemini_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str, range_pct: Optional[float]) -> str:
+    """Envoie au modèle uniquement les indicateurs déjà calculés."""
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key:
         return "Clé API Gemini absente. Ajoutez GEMINI_API_KEY dans .streamlit/secrets.toml."
@@ -1612,11 +1610,11 @@ def call_mistral_analysis(stock_row: pd.Series, pe: Optional[float], range_label
         "Tu es un assistant d'analyse technique boursière. À partir des indicateurs fournis, rédige une "
         "synthèse factuelle et neutre de 4 à 6 phrases en français : explique ce que montrent ces "
         "indicateurs pris ensemble. N'émets aucune recommandation d'achat ou de vente, ne prédis pas de "
-        "prix futur, et rappelle en une phrase que ce sont des signaux techniques de court terme, pas un "
+        "prix futur, et rappelle en une phrase que ce sont des signaux techniques de court terme, et non un "
         "conseil en investissement."
     )
     payload = {
-        "model": "mistral-small-latest",
+        "model": "gemini-small-latest",
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": contexte},
@@ -1628,13 +1626,13 @@ def call_mistral_analysis(stock_row: pd.Series, pe: Optional[float], range_label
     last_error = None
     for attempt in range(3):
         try:
-            resp = requests.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=payload, timeout=20)
+            resp = requests.post("https://aistudio.google.com/prompts/new_chat", headers=headers, json=payload, timeout=20)
             if resp.status_code == 429:
                 last_error = "limite de requêtes atteinte (429)"
                 if attempt < 2:
                     time.sleep(2 * (attempt + 1))  # 2s puis 4s
                     continue
-                return "Limite de requêtes API Mistral atteinte. Réessayez dans quelques instants."
+                return "Limite de requêtes API Gemini atteinte. Réessayez dans quelques instants."
             resp.raise_for_status()
             return resp.json()["choices"][0]["message"]["content"].strip()
         except Exception as e:
@@ -2244,7 +2242,7 @@ with tab_chart:
             )
         if analyser_clicked:
             with st.spinner("Analyse en cours..."):
-                st.session_state[f"analyse_{selected_ticker}"] = call_mistral_analysis(
+                st.session_state[f"analyse_{selected_ticker}"] = call_gemini_analysis(
                     stock_row, pe_chart, range_labels[selected_range], range_pct
                 )
         analyse_txt = st.session_state.get(f"analyse_{selected_ticker}")
