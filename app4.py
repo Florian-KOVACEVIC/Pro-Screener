@@ -1585,9 +1585,9 @@ def call_mistral_analysis(stock_row: pd.Series, pe: Optional[float], range_label
     """Envoie au modèle uniquement les indicateurs déjà calculés (pas
     d'historique brut) : peu de tokens, coût minime par appel. La clé API
     vient de st.secrets, jamais codée en dur ici — voir .streamlit/secrets.toml."""
-    api_key = st.secrets.get("MISTRAL_API_KEY")
+    api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key:
-        return "Clé API Mistral absente. Ajoutez MISTRAL_API_KEY dans .streamlit/secrets.toml."
+        return "Clé API Gemini absente. Ajoutez GEMINI_API_KEY dans .streamlit/secrets.toml."
 
     lignes = [
         f"Titre : {stock_row['Nom']} ({stock_row['Ticker']}), secteur {stock_row['Groupe']}.",
