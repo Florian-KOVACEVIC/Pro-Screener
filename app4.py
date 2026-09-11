@@ -484,7 +484,7 @@ def load_dow30() -> pd.DataFrame:
 # fiabilité totale (zéro dépendance réseau) et représentativité.
 
 def load_ftse100_leaders() -> pd.DataFrame:
-    """Sélection maison des ~69 plus grandes valeurs du FTSE 100 (sur 100
+    """Sélection maison des ~66 plus grandes valeurs du FTSE 100 (sur 100
     composants), triée par capitalisation décroissante. Tickers EPIC bruts ;
     le suffixe .L est ajouté automatiquement (_ensure_suffix). Certains
     tickers se terminent déjà par un point sur le LSE (BAE Systems, Aviva,
@@ -505,8 +505,8 @@ def load_ftse100_leaders() -> pd.DataFrame:
         ("VOD", "Vodafone Group", "Télécom"), ("BA.L", "BAE Systems", "Défense"),
         ("STAN", "Standard Chartered", "Finance"), ("NWG", "NatWest Group", "Finance"),
         ("AV.L", "Aviva", "Assurance"), ("LGEN", "Legal & General", "Assurance"),
-        ("SSE", "SSE", "Énergie / Utilities"), ("CRH", "CRH", "Matériaux"),
-        ("EXPN", "Experian", "Data / Information"), ("FLTR", "Flutter Entertainment", "Jeux / Paris"),
+        ("SSE", "SSE", "Énergie / Utilities"),
+        ("EXPN", "Experian", "Data / Information"),
         ("SGE", "Sage Group", "Logiciel"), ("SN.L", "Smith & Nephew", "Santé"),
         ("TSCO", "Tesco", "Distribution"), ("JD.L", "JD Sports Fashion", "Distribution"),
         ("NXT", "Next", "Distribution"), ("WPP", "WPP", "Communication"),
@@ -526,7 +526,7 @@ def load_ftse100_leaders() -> pd.DataFrame:
         ("EZJ", "easyJet", "Aérien"), ("WTB", "Whitbread", "Hôtellerie / Restauration"),
         ("MKS", "Marks & Spencer", "Distribution"), ("KGF", "Kingfisher", "Distribution / Bricolage"),
         ("STJ", "St James's Place", "Gestion de patrimoine"), ("ADM", "Admiral Group", "Assurance"),
-        ("SMDS", "Smurfit WestRock", "Emballage"), ("CNA", "Centrica", "Énergie / Utilities"),
+        ("CNA", "Centrica", "Énergie / Utilities"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
@@ -922,7 +922,7 @@ MARKETS: dict[str, MarketConfig] = {
     ),
     "ftse100": MarketConfig(
         "ftse100", "FTSE 100 · Grandes capitalisations (Royaume-Uni)", load_ftse100_leaders, ".L", "£", "Secteur", is_curated=True,
-        note="Sélection maison des ~69 plus grandes valeurs du FTSE 100 (sur 100 composants), liste non "
+        note="Sélection maison des ~66 plus grandes valeurs du FTSE 100 (sur 100 composants), liste non "
              "exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
         last_verified="2026-09-05",
     ),
@@ -952,7 +952,7 @@ MARKETS: dict[str, MarketConfig] = {
              "pharma/biotech, financières. Multi-devises (affichée par titre).",
     ),
     "crypto": MarketConfig(
-        "crypto", "₿ Cryptomonnaies (Top 26)", load_crypto_top, "", "$", "Catégorie", is_curated=True,
+        "crypto", "Cryptomonnaies (Top 26)", load_crypto_top, "", "$", "Catégorie", is_curated=True,
         note="Sélection maison des cryptos majeures, vérifiez que chaque ticker est bien coté sur Yahoo Finance.",
     ),
     "global": MarketConfig(
@@ -1581,6 +1581,60 @@ def fetch_pe_ratio(ticker: str):
     except Exception:
         return None
 
+def call_mistral_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str, range_pct: Optional[float]) -> str:
+    """Envoie au modèle uniquement les indicateurs déjà calculés (pas
+    d'historique brut) : peu de tokens, coût minime par appel. La clé API
+    vient de st.secrets, jamais codée en dur ici — voir .streamlit/secrets.toml."""
+    api_key = st.secrets.get("MISTRAL_API_KEY")
+    if not api_key:
+        return "Clé API Mistral absente. Ajoutez MISTRAL_API_KEY dans .streamlit/secrets.toml."
+
+    lignes = [
+        f"Titre : {stock_row['Nom']} ({stock_row['Ticker']}), secteur {stock_row['Groupe']}.",
+        f"Prix actuel : {stock_row['Devise']}{stock_row['Prix']:.2f}.",
+        f"Variation 1 jour : {stock_row['Var. 1J (%)']:+.2f}%.",
+    ]
+    if stock_row["Var. 5J (%)"] is not None:
+        lignes.append(f"Variation 5 jours : {stock_row['Var. 5J (%)']:+.2f}%.")
+    if range_pct is not None:
+        lignes.append(f"Évolution sur la plage {range_label} : {range_pct:+.2f}%.")
+    lignes.append(f"RSI (14) : {stock_row['RSI (14)']}.")
+    lignes.append(f"Sous la bande de Bollinger basse : {'oui' if stock_row['Sous Bollinger'] else 'non'}.")
+    lignes.append(f"Ratio de volume vs moyenne 20 jours : {stock_row['Ratio Vol.']}.")
+    lignes.append(f"Croisement MACD haussier naissant : {'oui' if stock_row['MACD haussier'] else 'non'}.")
+    lignes.append(f"Position vs plus bas de la période : {stock_row['% vs Bas (période)']}%.")
+    lignes.append(f"Score d'opportunité interne (0-100, technique uniquement) : {stock_row['Score Opp.']}.")
+    if pe is not None:
+        lignes.append(f"Ratio P/E : {pe}.")
+    contexte = "\n".join(lignes)
+
+    system_prompt = (
+        "Tu es un assistant d'analyse technique boursière. À partir des indicateurs fournis, rédige une "
+        "synthèse factuelle et neutre de 4 à 6 phrases en français : explique ce que montrent ces "
+        "indicateurs pris ensemble. N'émets aucune recommandation d'achat ou de vente, ne prédis pas de "
+        "prix futur, et rappelle en une phrase que ce sont des signaux techniques de court terme, pas un "
+        "conseil en investissement."
+    )
+    try:
+        resp = requests.post(
+            "https://api.mistral.ai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "mistral-small-latest",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": contexte},
+                ],
+                "temperature": 0.3,
+                "max_tokens": 350,
+            },
+            timeout=20,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        return f"Analyse indisponible : {e}"
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_chart_history(ticker: str) -> pd.DataFrame:
     """Historique dédié pour l'onglet graphique (5 ans, quotidien), séparé
@@ -1654,9 +1708,9 @@ market_key = st.sidebar.selectbox(
 )
 market = MARKETS[market_key]
 if market.note:
-    st.sidebar.caption(f"ℹ️ {market.note}")
+    st.sidebar.caption(market.note)
 if market.is_curated and market.last_verified:
-    st.sidebar.caption(f"🗓️ Composition relue manuellement le {market.last_verified} — à revérifier périodiquement.")
+    st.sidebar.caption(f"Composition relue manuellement le {market.last_verified} — à revérifier périodiquement.")
 
 if market.key == "custom":
     if "custom_watchlist" not in st.session_state:
@@ -2174,6 +2228,18 @@ with tab_chart:
             for label, value, color in chart_kpis
         )
         st.markdown(f'<div class="kpi-grid">{chart_kpi_html}</div>', unsafe_allow_html=True)
+
+        st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+        if st.button("Analyser", key=f"analyser_{selected_ticker}"):
+            with st.spinner("Analyse en cours..."):
+                st.session_state[f"analyse_{selected_ticker}"] = call_mistral_analysis(
+                    stock_row, pe_chart, range_labels[selected_range], range_pct
+                )
+        analyse_txt = st.session_state.get(f"analyse_{selected_ticker}")
+        if analyse_txt:
+            with st.container(border=True):
+                st.markdown('<div class="panel-title">Analyse</div>', unsafe_allow_html=True)
+                st.markdown(analyse_txt)
 
 # ---- Onglet Méthodologie -------------------------------------------------
 with tab_about:
