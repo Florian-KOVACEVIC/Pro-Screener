@@ -484,7 +484,7 @@ def load_dow30() -> pd.DataFrame:
 # fiabilité totale (zéro dépendance réseau) et représentativité.
 
 def load_ftse100_leaders() -> pd.DataFrame:
-    """Sélection maison des ~70 plus grandes valeurs du FTSE 100 (sur 100
+    """Sélection maison des ~69 plus grandes valeurs du FTSE 100 (sur 100
     composants), triée par capitalisation décroissante. Tickers EPIC bruts ;
     le suffixe .L est ajouté automatiquement (_ensure_suffix). Certains
     tickers se terminent déjà par un point sur le LSE (BAE Systems, Aviva,
@@ -520,7 +520,7 @@ def load_ftse100_leaders() -> pd.DataFrame:
         ("RKT", "Reckitt Benckiser", "Consommation"), ("MNG", "M&G", "Finance / Gestion d'actifs"),
         ("PHNX", "Phoenix Group Holdings", "Assurance"), ("SVT", "Severn Trent", "Utilities / Eau"),
         ("UU.L", "United Utilities", "Utilities / Eau"), ("PSON", "Pearson", "Éducation / Media"),
-        ("BT-A.L", "BT Group", "Télécom"), ("SGRO", "Segro", "Immobilier / REIT industriel"),
+        ("SGRO", "Segro", "Immobilier / REIT industriel"),
         ("LAND", "Land Securities", "Immobilier / REIT"), ("BLND", "British Land", "Immobilier / REIT"),
         ("ENT", "Entain", "Jeux / Paris"), ("IAG", "International Airlines Group", "Aérien"),
         ("EZJ", "easyJet", "Aérien"), ("WTB", "Whitbread", "Hôtellerie / Restauration"),
@@ -548,9 +548,9 @@ def load_cac40_leaders() -> pd.DataFrame:
         ("DSY.PA", "Dassault Systèmes", "Tech"), ("RI.PA", "Pernod Ricard", "Consommation"),
         ("VIE.PA", "Veolia", "Environnement"), ("ENGI.PA", "Engie", "Énergie"),
         ("ORA.PA", "Orange", "Télécom"), ("STM", "STMicroelectronics", "Semi-conducteurs"),
-        ("ALO.PA", "Alstom", "Transport ferroviaire"), ("MT.PA", "ArcelorMittal", "Matériaux / Acier"),
+        ("ALO.PA", "Alstom", "Transport ferroviaire"), ("MT", "ArcelorMittal", "Matériaux / Acier"),
         ("BVI.PA", "Bureau Veritas", "Services / Certification"), ("EDEN.PA", "Edenred", "Services prépayés"),
-        ("ERF.PA", "Eurofins Scientific", "Santé / Laboratoires"), ("STLAP.PA", "Stellantis", "Automobile"),
+        ("ERF.PA", "Eurofins Scientific", "Santé / Laboratoires"), ("STLA", "Stellantis", "Automobile"),
         ("TEP.PA", "Teleperformance", "Services / Centres d'appels"), ("URW.PA", "Unibail-Rodamco-Westfield", "Immobilier"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
@@ -567,7 +567,7 @@ def load_dax40_leaders() -> pd.DataFrame:
         ("EOAN.DE", "E.ON", "Énergie"), ("DHL.DE", "Deutsche Post DHL Group", "Logistique"),
         ("CON.DE", "Continental", "Automobile"), ("HEN3.DE", "Henkel", "Consommation"),
         ("FRE.DE", "Fresenius", "Santé"), ("VNA.DE", "Vonovia", "Immobilier"),
-        ("AIR.DE", "Airbus (cotation Francfort)", "Aéronautique"), ("BEI.DE", "Beiersdorf", "Consommation"),
+        ("AIR.PA", "Airbus", "Aéronautique"), ("BEI.DE", "Beiersdorf", "Consommation"),
         ("BNR.DE", "Brenntag", "Chimie / Distribution"), ("CBK.DE", "Commerzbank", "Finance"),
         ("1COV.DE", "Covestro", "Chimie"), ("DTG.DE", "Daimler Truck", "Automobile / Poids lourds"),
         ("DB1.DE", "Deutsche Börse", "Finance / Bourse"), ("FME.DE", "Fresenius Medical Care", "Santé"),
@@ -631,7 +631,7 @@ def load_sx5e_leaders() -> pd.DataFrame:
         ("IFX.DE", "Infineon", "Semi-conducteurs"), ("DB1.DE", "Deutsche Börse", "Finance / Bourse"),
         ("OR.PA", "L'Oréal", "Consommation"), ("EL.PA", "EssilorLuxottica", "Santé"),
         ("VNA.DE", "Vonovia", "Immobilier"), ("SHL.DE", "Siemens Healthineers", "Santé"),
-        ("STLAP.PA", "Stellantis", "Automobile"), ("ITX.MC", "Inditex", "Distribution / Habillement"),
+        ("STLA", "Stellantis", "Automobile"), ("ITX.MC", "Inditex", "Distribution / Habillement"),
         ("BBVA.MC", "BBVA", "Finance"), ("INGA.AS", "ING Group", "Finance"),
         ("ADYEN.AS", "Adyen", "Paiements"), ("PRX.AS", "Prosus", "Tech / Investissement"),
         ("ABI.BR", "Anheuser-Busch InBev", "Consommation / Brasserie"), ("UCG.MI", "UniCredit", "Finance"),
@@ -643,7 +643,7 @@ def load_sx5e_leaders() -> pd.DataFrame:
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
 def load_hangseng_leaders() -> pd.DataFrame:
-    """Sélection maison des ~70 plus grandes valeurs du Hang Seng (l'indice
+    """Sélection maison des ~68 plus grandes valeurs du Hang Seng (l'indice
     compte une composition plus large depuis sa réforme, avec un
     renouvellement non négligeable), triée par capitalisation décroissante :
     le scraping Wikipedia s'est montré peu fiable pour cet indice. Codes
@@ -684,7 +684,6 @@ def load_hangseng_leaders() -> pd.DataFrame:
         ("2313", "Shenzhou International", "Habillement / Textile"), ("2688", "ENN Energy", "Énergie"),
         ("6690", "Haier Smart Home", "Électroménager"), ("6862", "Haidilao International Holding", "Restauration"),
         ("9868", "XPeng", "Automobile / EV"), ("9866", "NIO", "Automobile / EV"),
-        ("9698", "Kingsoft Corp", "Logiciel / Jeux"), ("6060", "ESR Group", "Immobilier / Logistique"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
@@ -923,7 +922,7 @@ MARKETS: dict[str, MarketConfig] = {
     ),
     "ftse100": MarketConfig(
         "ftse100", "FTSE 100 · Grandes capitalisations (Royaume-Uni)", load_ftse100_leaders, ".L", "£", "Secteur", is_curated=True,
-        note="Sélection maison des ~70 plus grandes valeurs du FTSE 100 (sur 100 composants), liste non "
+        note="Sélection maison des ~69 plus grandes valeurs du FTSE 100 (sur 100 composants), liste non "
              "exhaustive (le scraping Wikipedia s'est montré peu fiable pour cet indice).",
         last_verified="2026-09-05",
     ),
@@ -934,7 +933,7 @@ MARKETS: dict[str, MarketConfig] = {
     ),
     "hangseng": MarketConfig(
         "hangseng", "Hang Seng · Grandes capitalisations (Hong Kong)", load_hangseng_leaders, ".HK", "HK$", "Secteur", is_curated=True,
-        note="Sélection maison des ~70 plus grandes valeurs du Hang Seng, liste non exhaustive (le scraping "
+        note="Sélection maison des ~68 plus grandes valeurs du Hang Seng, liste non exhaustive (le scraping "
              "Wikipedia s'est montré peu fiable pour cet indice).",
         last_verified="2026-09-05",
     ),
@@ -1147,9 +1146,10 @@ def _extract_frame(data: pd.DataFrame, symbol: str, n_tickers: int) -> pd.DataFr
         return data[symbol].dropna()
     return data.dropna()
 
-BATCH_SIZE = 60      # nombre de tickers par appel yfinance : limite le risque de rate-limit Yahoo
-MAX_RETRIES = 3       # tentatives par lot avant abandon
-BASE_BACKOFF_S = 1.5  # délai de base (secondes), doublé à chaque tentative + petit aléa (jitter)
+BATCH_SIZE = 60       # nombre de tickers par appel yfinance : limite le risque de rate-limit Yahoo
+MAX_RETRIES = 3        # tentatives par lot avant abandon
+BASE_BACKOFF_S = 1.5   # délai de base (secondes), doublé à chaque tentative + petit aléa (jitter)
+BATCH_PAUSE_S = 0.4    # pause entre deux lots réussis consécutifs (voir fetch_and_analyze)
 
 def _download_batch_with_retry(batch: list[str]) -> tuple[Optional[pd.DataFrame], Optional[str]]:
     """Télécharge un lot de tickers avec retry + backoff exponentiel (+jitter).
@@ -1185,7 +1185,13 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
     skipped = []  # (symbol, raison) : rendu visible dans l'UI plutôt que silencieusement perdu
     any_batch_ok = False
 
-    for batch in batches:
+    for i, batch in enumerate(batches):
+        if i > 0:
+            # Petite pause entre lots réussis : sur un gros univers (Sélection
+            # Globale ~885 titres -> ~15 lots), enchaîner les appels sans
+            # respirer augmente le risque de se faire rate-limiter par Yahoo
+            # sur l'ensemble de la séquence, pas seulement lot par lot.
+            time.sleep(BATCH_PAUSE_S)
         data, batch_error = _download_batch_with_retry(batch)
         if data is None:
             for symbol in batch:
