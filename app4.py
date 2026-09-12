@@ -1582,14 +1582,13 @@ def fetch_pe_ratio(ticker: str):
         return None
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def _discover_gemini_model(api_key: str) -> Optional[str]:
+def _discover_gemini_model(api_key: str, exclude: tuple = ()) -> Optional[str]:
     """Interroge l'API pour connaître le(s) modèle(s) réellement disponibles
     pour cette clé, plutôt que de coder en dur un nom de modèle que Google
-    peut renommer ou retirer à tout moment (cause du 404 précédent : le nom
-    codé en dur n'existait plus/pas pour cette clé). Retourne le premier
-    modèle supportant generateContent, en priorisant les noms contenant
-    "flash" (rapide, peu coûteux). Le nom déjà renvoyé par l'API inclut le
-    préfixe "models/", donc réutilisable tel quel dans l'URL d'appel."""
+    peut renommer ou retirer à tout moment. Note : la liste renvoyée par
+    Google peut inclure des modèles listés mais déjà dépréciés pour les
+    nouveaux usages (constaté en pratique) — on trie donc par version la
+    plus récente extraite du nom, pas juste par ordre de la liste."""
     try:
         resp = requests.get(
             "https://generativelanguage.googleapis.com/v1beta/models",
@@ -1597,9 +1596,16 @@ def _discover_gemini_model(api_key: str) -> Optional[str]:
         )
         resp.raise_for_status()
         models = resp.json().get("models", [])
-        candidates = [m["name"] for m in models if "generateContent" in m.get("supportedGenerationMethods", [])]
-        flash_first = sorted(candidates, key=lambda n: 0 if "flash" in n.lower() else 1)
-        return flash_first[0] if flash_first else None
+        candidates = [
+            m["name"] for m in models
+            if "generateContent" in m.get("supportedGenerationMethods", []) and m["name"] not in exclude
+        ]
+        def _sort_key(name: str):
+            v = re.search(r"(\d+)\.(\d+)", name)
+            version = (int(v.group(1)), int(v.group(2))) if v else (0, 0)
+            return (0 if "flash" in name.lower() else 1, -version[0], -version[1])
+        candidates.sort(key=_sort_key)
+        return candidates[0] if candidates else None
     except Exception:
         return None
 
@@ -1610,10 +1616,6 @@ def call_ai_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key:
         return "Clé API Gemini absente. Ajoutez GEMINI_API_KEY dans .streamlit/secrets.toml."
-
-    model_name = _discover_gemini_model(api_key)
-    if not model_name:
-        return "Impossible de récupérer la liste des modèles Gemini disponibles pour cette clé (vérifiez la clé ou le projet associé)."
 
     lignes = [
         f"Titre : {stock_row['Nom']} ({stock_row['Ticker']}), secteur {stock_row['Groupe']}.",
@@ -1641,17 +1643,30 @@ def call_ai_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str
         "prix futur, et rappelle en une phrase que ce sont des signaux techniques de court terme, pas un "
         "conseil en investissement."
     )
-    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent"
     headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
         "contents": [{"role": "user", "parts": [{"text": contexte}]}],
         "generationConfig": {"temperature": 0.3, "maxOutputTokens": 400},
     }
+
+    def _post(model_name: str):
+        url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent"
+        return requests.post(url, headers=headers, json=payload, timeout=20)
+
+    # "models/gemini-3.6-flash" confirmé fonctionnel par un test manuel direct
+    # (curl) au moment de l'écriture. Si Google le retire à son tour, repli
+    # automatique sur la découverte dynamique plutôt que de re-planter pareil.
+    model_name = "models/gemini-3.6-flash"
     last_error = None
     for attempt in range(3):
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=20)
+            resp = _post(model_name)
+            if resp.status_code == 404:
+                fallback = _discover_gemini_model(api_key, exclude=(model_name,))
+                if fallback:
+                    model_name = fallback
+                    resp = _post(model_name)
             if resp.status_code == 429:
                 last_error = "limite de requêtes atteinte (429)"
                 if attempt < 2:
