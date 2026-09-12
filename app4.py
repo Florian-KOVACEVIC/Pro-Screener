@@ -1581,6 +1581,28 @@ def fetch_pe_ratio(ticker: str):
     except Exception:
         return None
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def _discover_gemini_model(api_key: str) -> Optional[str]:
+    """Interroge l'API pour connaître le(s) modèle(s) réellement disponibles
+    pour cette clé, plutôt que de coder en dur un nom de modèle que Google
+    peut renommer ou retirer à tout moment (cause du 404 précédent : le nom
+    codé en dur n'existait plus/pas pour cette clé). Retourne le premier
+    modèle supportant generateContent, en priorisant les noms contenant
+    "flash" (rapide, peu coûteux). Le nom déjà renvoyé par l'API inclut le
+    préfixe "models/", donc réutilisable tel quel dans l'URL d'appel."""
+    try:
+        resp = requests.get(
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            headers={"x-goog-api-key": api_key}, timeout=15,
+        )
+        resp.raise_for_status()
+        models = resp.json().get("models", [])
+        candidates = [m["name"] for m in models if "generateContent" in m.get("supportedGenerationMethods", [])]
+        flash_first = sorted(candidates, key=lambda n: 0 if "flash" in n.lower() else 1)
+        return flash_first[0] if flash_first else None
+    except Exception:
+        return None
+
 def call_ai_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str, range_pct: Optional[float]) -> str:
     """Envoie au modèle uniquement les indicateurs déjà calculés (pas
     d'historique brut) : peu de tokens, coût minime par appel. La clé API
@@ -1588,6 +1610,10 @@ def call_ai_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key:
         return "Clé API Gemini absente. Ajoutez GEMINI_API_KEY dans .streamlit/secrets.toml."
+
+    model_name = _discover_gemini_model(api_key)
+    if not model_name:
+        return "Impossible de récupérer la liste des modèles Gemini disponibles pour cette clé (vérifiez la clé ou le projet associé)."
 
     lignes = [
         f"Titre : {stock_row['Nom']} ({stock_row['Ticker']}), secteur {stock_row['Groupe']}.",
@@ -1615,7 +1641,7 @@ def call_ai_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str
         "prix futur, et rappelle en une phrase que ce sont des signaux techniques de court terme, pas un "
         "conseil en investissement."
     )
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent"
     headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
