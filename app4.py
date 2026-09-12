@@ -1615,7 +1615,8 @@ def call_ai_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str
         "prix futur, et rappelle en une phrase que ce sont des signaux techniques de court terme, pas un "
         "conseil en investissement."
     )
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
         "contents": [{"role": "user", "parts": [{"text": contexte}]}],
@@ -1624,7 +1625,7 @@ def call_ai_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str
     last_error = None
     for attempt in range(3):
         try:
-            resp = requests.post(url, json=payload, timeout=20)
+            resp = requests.post(url, headers=headers, json=payload, timeout=20)
             if resp.status_code == 429:
                 last_error = "limite de requêtes atteinte (429)"
                 if attempt < 2:
