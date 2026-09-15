@@ -533,7 +533,7 @@ def load_ftse100_leaders() -> pd.DataFrame:
 def load_cac40_leaders() -> pd.DataFrame:
     data = [
         ("MC.PA", "LVMH", "Luxe"), ("OR.PA", "L'Oréal", "Consommation"),
-        ("TTE", "TotalEnergies", "Énergie"), ("SAN.PA", "Sanofi", "Santé"),
+        ("TTE.PA", "TotalEnergies", "Énergie"), ("SAN.PA", "Sanofi", "Santé"),
         ("BNP.PA", "BNP Paribas", "Finance"), ("CS.PA", "AXA", "Finance"),
         ("AI.PA", "Air Liquide", "Industrie"), ("AIR.PA", "Airbus", "Aéronautique"),
         ("BN.PA", "Danone", "Consommation"), ("RNO.PA", "Renault", "Automobile"),
@@ -547,17 +547,17 @@ def load_cac40_leaders() -> pd.DataFrame:
         ("LR.PA", "Legrand", "Industrie"), ("CAP.PA", "Capgemini", "Tech / Conseil"),
         ("DSY.PA", "Dassault Systèmes", "Tech"), ("RI.PA", "Pernod Ricard", "Consommation"),
         ("VIE.PA", "Veolia", "Environnement"), ("ENGI.PA", "Engie", "Énergie"),
-        ("ORA.PA", "Orange", "Télécom"), ("STM", "STMicroelectronics", "Semi-conducteurs"),
-        ("ALO.PA", "Alstom", "Transport ferroviaire"), ("MT", "ArcelorMittal", "Matériaux / Acier"),
+        ("ORA.PA", "Orange", "Télécom"), ("STMPA.PA", "STMicroelectronics", "Semi-conducteurs"),
+        ("ALO.PA", "Alstom", "Transport ferroviaire"), ("MT.AS", "ArcelorMittal", "Matériaux / Acier"),
         ("BVI.PA", "Bureau Veritas", "Services / Certification"), ("EDEN.PA", "Edenred", "Services prépayés"),
-        ("ERF.PA", "Eurofins Scientific", "Santé / Laboratoires"), ("STLA", "Stellantis", "Automobile"),
+        ("ERF.PA", "Eurofins Scientific", "Santé / Laboratoires"), ("STLAP.PA", "Stellantis", "Automobile"),
         ("TEP.PA", "Teleperformance", "Services / Centres d'appels"), ("URW.PA", "Unibail-Rodamco-Westfield", "Immobilier"),
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
 def load_dax40_leaders() -> pd.DataFrame:
     data = [
-        ("SAP", "SAP", "Logiciels"), ("SIE.DE", "Siemens", "Industrie"),
+        ("SAP.DE", "SAP", "Logiciels"), ("SIE.DE", "Siemens", "Industrie"),
         ("VOW3.DE", "Volkswagen", "Automobile"), ("BMW.DE", "BMW", "Automobile"),
         ("MBG.DE", "Mercedes-Benz Group", "Automobile"), ("ALV.DE", "Allianz", "Finance"),
         ("ADS.DE", "Adidas", "Consommation"), ("DBK.DE", "Deutsche Bank", "Finance"),
@@ -614,10 +614,10 @@ def load_sx5e_leaders() -> pd.DataFrame:
     """Grandes valeurs de la zone euro proches de la composition du
     EURO STOXX 50 (SX5E). Sélection maison, non exhaustive."""
     data = [
-        ("MC.PA", "LVMH", "Luxe"), ("TTE", "TotalEnergies", "Énergie"),
-        ("SAN.PA", "Sanofi", "Santé"), ("SAP", "SAP", "Logiciels"),
+        ("MC.PA", "LVMH", "Luxe"), ("TTE.PA", "TotalEnergies", "Énergie"),
+        ("SAN.PA", "Sanofi", "Santé"), ("SAP.DE", "SAP", "Logiciels"),
         ("SIE.DE", "Siemens", "Industrie"), ("ALV.DE", "Allianz", "Finance"),
-        ("ASML", "ASML Holding", "Semi-conducteurs"), ("AIR.PA", "Airbus", "Aéronautique"),
+        ("ASML.AS", "ASML Holding", "Semi-conducteurs"), ("AIR.PA", "Airbus", "Aéronautique"),
         ("AI.PA", "Air Liquide", "Industrie"), ("SAN.MC", "Banco Santander", "Finance"),
         ("IBE.MC", "Iberdrola", "Énergie"), ("ISP.MI", "Intesa Sanpaolo", "Finance"),
         ("ENEL.MI", "Enel", "Énergie"), ("ENI.MI", "Eni", "Énergie"),
@@ -631,12 +631,12 @@ def load_sx5e_leaders() -> pd.DataFrame:
         ("IFX.DE", "Infineon", "Semi-conducteurs"), ("DB1.DE", "Deutsche Börse", "Finance / Bourse"),
         ("OR.PA", "L'Oréal", "Consommation"), ("EL.PA", "EssilorLuxottica", "Santé"),
         ("VNA.DE", "Vonovia", "Immobilier"), ("SHL.DE", "Siemens Healthineers", "Santé"),
-        ("STLA", "Stellantis", "Automobile"), ("ITX.MC", "Inditex", "Distribution / Habillement"),
+        ("STLAP.PA", "Stellantis", "Automobile"), ("ITX.MC", "Inditex", "Distribution / Habillement"),
         ("BBVA.MC", "BBVA", "Finance"), ("INGA.AS", "ING Group", "Finance"),
         ("ADYEN.AS", "Adyen", "Paiements"), ("PRX.AS", "Prosus", "Tech / Investissement"),
         ("ABI.BR", "Anheuser-Busch InBev", "Consommation / Brasserie"), ("UCG.MI", "UniCredit", "Finance"),
         ("RACE.MI", "Ferrari", "Automobile / Luxe"), ("AMS.MC", "Amadeus IT Group", "Tech / Voyage"),
-        ("CRH", "CRH plc", "Matériaux"), ("NOKIA.HE", "Nokia", "Télécom / Équipements"),
+        ("NOKIA.HE", "Nokia", "Télécom / Équipements"),
         ("NDA-FI.HE", "Nordea Bank", "Finance"), ("WKL.AS", "Wolters Kluwer", "Media / Info"),
         ("KNEBV.HE", "Kone Corp", "Industrie / Ascenseurs"), ("DHL.DE", "Deutsche Post DHL Group", "Logistique"),
     ]
@@ -841,57 +841,6 @@ def load_priority_watchlist() -> pd.DataFrame:
     ]
     return pd.DataFrame(data, columns=["Symbol", "Nom", "Groupe"])
 
-# Liste des fonctions à agréger — pas les DataFrames, les fonctions elles-mêmes :
-# load_global_selection() les rappelle à chaque exécution, donc tout ticker
-# ajouté plus tard dans l'une d'elles (ex: la Sélection diversifiée) remonte
-# automatiquement ici. Volontairement exclu : le Marché personnalisé (n'a pas
-# de loader, propre à la session de chacun). Le S&P 500 est ajouté à part
-# (voir load_global_selection) car scrapé en direct plutôt que codé en dur.
-_HARDCODED_LOADERS = [
-    load_nasdaq100, load_dow30, load_cac40_leaders, load_dax40_leaders, load_sx5e_leaders,
-    load_ftse100_leaders, load_nikkei_leaders, load_hangseng_leaders, load_kospi_leaders,
-    load_asia_tech_leaders, load_priority_watchlist, load_crypto_top,
-]
-
-_LEGAL_SUFFIXES = {"holdings", "holding", "group", "groupe", "corporation", "corp", "company",
-                   "co", "inc", "plc", "sa", "ag", "nv", "ltd", "limited", "spa", "se"}
-
-def _normalize_company_name(name: str) -> str:
-    """Normalise un nom d'entreprise pour repérer les doublons entre listes
-    même quand le ticker diffère (ex : TotalEnergies coté "TTE" à Wall Street
-    et "TTE.PA" à Paris — même entreprise, deux tickers). Suppression par MOT
-    ENTIER des suffixes juridiques usuels, pas par sous-chaîne : un simple
-    `.replace("inc", "")` collisionnerait par exemple "Vinci" et "Visa" (tous
-    deux se retrouveraient réduits à "vi"), d'où la tokenisation."""
-    n = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode()
-    n = re.sub(r"\(.*?\)", "", n)  # retire les mentions entre parenthèses : "(ADR)", "(A)", "(cotation Francfort)"...
-    words = [w for w in re.findall(r"[a-z0-9]+", n.lower()) if w not in _LEGAL_SUFFIXES]
-    return "".join(words)
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def load_global_selection() -> pd.DataFrame:
-    """Agrège tous les tickers codés en dur de l'app (voir _HARDCODED_LOADERS)
-    ainsi que le S&P 500 (scrapé en direct ; si le scraping échoue, la
-    Sélection Globale reste utilisable avec les seules listes maison plutôt
-    que de tomber en erreur).
-
-    Deux passes de dédoublonnage : par ticker exact d'abord (un même titre
-    peut figurer avec le même symbole dans plusieurs listes, ex : TTE dans le
-    CAC 40 et le SX5E), puis par nom d'entreprise normalisé (pour les cas où
-    le même titre est coté sous des tickers différents selon la place
-    boursière, ex : TTE / TTE.PA). Dans les deux cas, la première occurrence
-    rencontrée (dans l'ordre de _HARDCODED_LOADERS) est conservée."""
-    frames = [loader() for loader in _HARDCODED_LOADERS]
-    try:
-        frames.append(load_sp500())
-    except Exception:
-        pass  # Sélection Globale toujours utilisable même si le scraping S&P 500 échoue
-    combined = pd.concat(frames, ignore_index=True).drop_duplicates(subset="Symbol", keep="first")
-    combined["_norm_name"] = combined["Nom"].map(_normalize_company_name)
-    combined = combined.drop_duplicates(subset="_norm_name", keep="first").drop(columns="_norm_name")
-    return combined.reset_index(drop=True)
-
-
 MARKETS: dict[str, MarketConfig] = {
     "sp500": MarketConfig("sp500", "S&P 500 (États-Unis)", load_sp500, "", "$", "Secteur GICS"),
     "nasdaq100": MarketConfig(
@@ -954,14 +903,6 @@ MARKETS: dict[str, MarketConfig] = {
     "crypto": MarketConfig(
         "crypto", "Cryptomonnaies (Top 26)", load_crypto_top, "", "$", "Catégorie", is_curated=True,
         note="Sélection maison des cryptos majeures, vérifiez que chaque ticker est bien coté sur Yahoo Finance.",
-    ),
-    "global": MarketConfig(
-        "global", "Sélection Globale (toutes les listes maison + S&P 500)", load_global_selection, "", "mixte", "Groupe", is_curated=True,
-        note="Agrège le Nasdaq 100, le Dow 30, le CAC 40, le DAX 40, le SX5E, le FTSE 100, le Nikkei 225, le "
-             "Hang Seng, le Kospi, l'Asie Tech, la Sélection diversifiée, les Cryptomonnaies, et le S&P 500 "
-             "(scrapé en direct) — hors Marché personnalisé. Dédoublonné par ticker puis par nom d'entreprise "
-             "(ex : TotalEnergies n'apparaît qu'une fois même s'il est listé sous TTE dans une liste et TTE.PA "
-             "dans une autre).",
     ),
     "custom": MarketConfig(
         "custom", "Marché personnalisé", None, "", "$", "Groupe", is_curated=True,
@@ -1328,7 +1269,7 @@ def render_opportunity_card(row: pd.Series, currency: str, rank_label: str) -> N
 
 def infer_currency(ticker: str) -> str:
     t = ticker.upper()
-    if t.endswith(".PA") or t.endswith(".DE") or t.endswith(".MC") or t.endswith(".MI") or t.endswith(".AS"):
+    if t.endswith(".PA") or t.endswith(".DE") or t.endswith(".MC") or t.endswith(".MI") or t.endswith(".AS") or t.endswith(".BR") or t.endswith(".HE"):
         return "€"
     if t.endswith(".L"):
         return "£"
@@ -1638,21 +1579,50 @@ def call_ai_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str
 
     system_prompt = (
         "Tu es un assistant d'analyse technique boursière. À partir des indicateurs fournis, rédige une "
-        "synthèse factuelle et neutre de 4 à 6 phrases en français : explique ce que montrent ces "
-        "indicateurs pris ensemble. N'émets aucune recommandation d'achat ou de vente, ne prédis pas de "
-        "prix futur, et rappelle en une phrase que ce sont des signaux techniques de court terme, pas un "
-        "conseil en investissement."
+        "analyse développée et concrète, en français, d'au moins 6 à 8 phrases complètes réparties en "
+        "2 courts paragraphes : le premier décrit ce que montre chaque indicateur significatif pris "
+        "individuellement (RSI, Bollinger, MACD, volume, position vs plus bas de la période) ; le second "
+        "synthétise ce que ces signaux suggèrent ensemble sur la dynamique court terme du titre. "
+        "N'écris jamais une simple phrase du type 'score de X/100' sans développer : le score n'est qu'un "
+        "résumé, pas une explication. N'émets aucune recommandation d'achat ou de vente, ne prédis pas de "
+        "prix futur, et termine par une phrase rappelant que ce sont des signaux techniques de court "
+        "terme, pas un conseil en investissement."
     )
     headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
         "contents": [{"role": "user", "parts": [{"text": contexte}]}],
-        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 400},
+        # maxOutputTokens élevé + thinkingBudget à 0 : les modèles Gemini récents
+        # ("thinking") consomment une partie du budget de sortie en raisonnement
+        # interne avant la réponse visible, ce qui tronquait la réponse à une
+        # phrase ("71/100 (...)") avec un budget trop court. thinkingBudget=0
+        # désactive ce raisonnement caché (paramètre non vérifié en direct pour
+        # gemini-3.6-flash, model inconnu de mes données d'entraînement : si le
+        # champ est ignoré ou provoque une erreur, le maxOutputTokens plus
+        # généreux reste de toute façon une amélioration).
+        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 2048, "thinkingConfig": {"thinkingBudget": 0}},
     }
 
     def _post(model_name: str):
         url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent"
         return requests.post(url, headers=headers, json=payload, timeout=20)
+
+    def _extract_text(resp) -> str:
+        """Concatène TOUS les éléments de 'parts' plutôt que de ne lire que le
+        premier : une réponse tronquée en une phrase incomplète ("L'action
+        Cooper Companies traverse une phase de forte" puis plus rien) suggère
+        que le texte pouvait être réparti sur plusieurs éléments de 'parts' et
+        que parts[0] seul ne contenait qu'un fragment. Signale aussi
+        explicitement une troncature par limite de tokens plutôt que de
+        rendre silencieusement une phrase coupée."""
+        candidate = resp.json()["candidates"][0]
+        parts = candidate.get("content", {}).get("parts", [])
+        text = "".join(p.get("text", "") for p in parts).strip()
+        if not text:
+            return f"Réponse vide de l'API (finishReason : {candidate.get('finishReason')})."
+        if candidate.get("finishReason") == "MAX_TOKENS":
+            text += "\n\n[Réponse tronquée par la limite de tokens de l'API.]"
+        return text
 
     # "models/gemini-3.6-flash" confirmé fonctionnel par un test manuel direct
     # (curl) au moment de l'écriture. Si Google le retire à son tour, repli
@@ -1674,7 +1644,7 @@ def call_ai_analysis(stock_row: pd.Series, pe: Optional[float], range_label: str
                     continue
                 return "Limite de requêtes API Gemini atteinte. Réessayez dans quelques instants."
             resp.raise_for_status()
-            return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return _extract_text(resp)
         except Exception as e:
             last_error = str(e)
             break
