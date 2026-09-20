@@ -796,7 +796,7 @@ def load_priority_watchlist() -> pd.DataFrame:
         # IA / Logiciel / Data
         ("BIDU", "Baidu (ADR)", "IA / Internet"), ("WK", "Workiva", "Logiciel"), ("CAP.PA", "Capgemini", "Services IT"),
         ("SOUN", "SoundHound AI", "IA"), ("PLTR", "Palantir", "IA / Logiciel"),
-        ("SNOW", "Snowflake", "Data / Logiciel"), ("BBAI", "BigBear.ai", "IA / Data"), ("9880.HK", "UBTECH Robotics", "Robotique"),
+        ("SNOW", "Snowflake", "Data / Logiciel"), ("BBAI", "BigBear.ai", "IA / Data"),
         # Electronique / optique / matériel
         ("SONY", "Sony Group (ADR)", "Electronique"),
         ("LITE", "Lumentum Holdings", "Optique / Composants"), ("AMBA", "Ambarella", "Semi-conducteurs"),
