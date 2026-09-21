@@ -948,8 +948,41 @@ def _ramp_score(value, lo, hi, max_pts):
         return 0.0
     return max_pts * (hi - value) / (hi - lo)
 
+def _five_day_pattern_score(returns_5d: list[float]) -> float:
+    """Note la COHÉRENCE et l'ampleur du repli des dernières séances (0-10
+    pts, même plafond que Var. 1J ci-dessous pour que la variance du jour
+    reste l'entrée dominante du score total, comme demandé), plutôt qu'un
+    simple cumul en pourcentage comme l'ancienne composante Var. 5J.
+
+    Justification : un cumul brut ne distingue pas une baisse régulière sur
+    5 séances (forte conviction vendeuse) d'un mouvement en dents de scie
+    (hausse, baisse, ré-hausse) ou d'une seule grosse séance isolée au
+    milieu d'un marché sans direction claire — trois situations très
+    différentes en analyse technique qui pouvaient pourtant produire le même
+    score. Deux ingrédients combinés :
+    - magnitude_pts (0-6) : ampleur du repli cumulé, comme avant.
+    - conviction_pts (0-4) : proportion de séances baissières x régularité
+      du mouvement (pénalise chaque changement de signe jour/jour). Un
+      double creux (baisse, rebond technique, nouvelle baisse — souvent un
+      retest de support) garde une conviction modérée à correcte ; un
+      aller-retour haussier/baissier sans direction nette tombe proche de 0.
+    """
+    n = len(returns_5d)
+    if n < 3:
+        return 0.0
+    down_ratio = sum(1 for r in returns_5d if r < 0) / n
+    net_return = sum(returns_5d)
+    reversals = sum(
+        1 for a, b in zip(returns_5d, returns_5d[1:])
+        if a != 0 and b != 0 and (a > 0) != (b > 0)
+    )
+    coherence = max(0.0, 1.0 - reversals / max(1, n - 1))
+    magnitude_pts = max(0.0, min(6.0, -net_return * 0.6))
+    conviction_pts = down_ratio * coherence * 4.0
+    return magnitude_pts + conviction_pts
+
 def compute_score(rsi, price, boll_low, boll_mid, vol_ratio, macd_hist_prev, macd_hist_last,
-                   pct_from_low, var_1j, var_5j) -> int:
+                   pct_from_low, var_1j, returns_5d) -> int:
     """Score d'opportunité 0-100. Combine survente (RSI), extension des Bandes
     de Bollinger, momentum baissier récent, anomalie de volume, retournement
     MACD naissant et proximité du plus bas sur la période.
@@ -978,12 +1011,17 @@ def compute_score(rsi, price, boll_low, boll_mid, vol_ratio, macd_hist_prev, mac
 
     # Momentum baissier récent (0-20 pts) : le signal le plus direct d'une opportunité
     # fraîche. Une variation positive ne retire rien ici (elle rapporte 0), mais réduit
-    # aussi la composante volume ci-dessous.
+    # aussi la composante volume ci-dessous. Var. 1J reste plafonnée à 10 pts, IDENTIQUE
+    # au plafond de la composante motif 5 jours ci-dessous : à magnitude égale, aucune des
+    # deux ne peut structurellement dominer l'autre, mais en pratique Var. 1J réagit plus
+    # vite (un seul jour) et pèse aussi indirectement sur RSI/Bollinger/volume, ce qui la
+    # rend dominante dans l'écrasante majorité des cas concrets — cohérent avec la demande
+    # que la variance du jour reste le signal prépondérant.
     mom = 0.0
     if pd.notna(var_1j):
         mom += max(0.0, min(10.0, -var_1j * 2.5))
-    if pd.notna(var_5j):
-        mom += max(0.0, min(10.0, -var_5j * 1.0))
+    if returns_5d:
+        mom += _five_day_pattern_score(returns_5d)
     score += mom
 
     # Volume anormal (0-15 pts) : un volume élevé n'est un signal d'opportunité que sur
@@ -1036,20 +1074,21 @@ def compute_score_backtest(market_key: str, tickers: tuple, _histories: dict, ho
         rsi, boll_low, sma20 = ind["rsi"], ind["boll_low"], ind["sma20"]
         vol_ratio, macd_hist = ind["vol_ratio"], ind["macd_hist"]
         expanding_min = close.expanding().min()
+        daily_returns_pct = close.pct_change() * 100  # série causale (rolling), réutilisée pour le motif 5 jours
 
         for t in range(30, n - horizon_days):
             last_p, prev_p = float(close.iloc[t]), float(close.iloc[t - 1])
             if not prev_p:
                 continue
             var_day = (last_p - prev_p) / prev_p * 100
-            var_5d = (last_p - float(close.iloc[t - 5])) / float(close.iloc[t - 5]) * 100 if t >= 5 and close.iloc[t - 5] else np.nan
             plow = float(expanding_min.iloc[t])
             pct_from_low = (last_p - plow) / plow * 100 if plow else np.nan
             macd_prev = macd_hist.iloc[t - 1] if t >= 1 else np.nan
             macd_last = macd_hist.iloc[t]
+            returns_5d = daily_returns_pct.iloc[max(0, t - 4):t + 1].dropna().tolist()
 
             score_t = compute_score(rsi.iloc[t], last_p, boll_low.iloc[t], sma20.iloc[t], vol_ratio.iloc[t],
-                                     macd_prev, macd_last, pct_from_low, var_day, var_5d)
+                                     macd_prev, macd_last, pct_from_low, var_day, returns_5d)
 
             future_p = float(close.iloc[t + horizon_days])
             if last_p:
@@ -1157,6 +1196,10 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
                 last_p, prev_p = float(close.iloc[-1]), float(close.iloc[-2])
                 var_day = (last_p - prev_p) / prev_p * 100
                 var_5d = (last_p - float(close.iloc[-5])) / float(close.iloc[-5]) * 100 if len(close) >= 5 else np.nan
+                # Motif des 5 dernières séances (rendements journaliers, pas juste le cumul
+                # brut ci-dessus) : voir _five_day_pattern_score, utilisé par compute_score.
+                # Var. 5J (cumul, ci-dessus) reste affichée telle quelle dans le tableau.
+                returns_5d = (close.pct_change() * 100).dropna().iloc[-5:].tolist()
 
                 ind = compute_indicators(df_s)
                 rsi = ind["rsi"].iloc[-1]
@@ -1171,7 +1214,7 @@ def fetch_and_analyze(market_key: str, symbols: list[str], names_map: dict, grou
                 pct_from_low = (last_p - period_low) / period_low * 100 if period_low else np.nan
 
                 score = compute_score(rsi, last_p, boll_low, boll_mid, vol_ratio, macd_prev, macd_last,
-                                       pct_from_low, var_day, var_5d)
+                                       pct_from_low, var_day, returns_5d)
 
                 rows.append({
                     "Ticker": symbol,
@@ -2272,7 +2315,7 @@ with tab_about:
             |---|---|---|
             | RSI (14) | rampe continue : 25 pts à RSI ≤ 15, 0 pt à RSI ≥ 50 | 25 |
             | Bandes de Bollinger | proportionnel à la profondeur sous la bande basse (20j, 2σ) | 20 |
-            | Momentum récent | variation 1J et 5J : plus la baisse récente est marquée, plus le score est élevé ; un rebond récent n'ajoute rien | 20 |
+            | Momentum récent | Var. 1J (0-10 pts, dominant) + cohérence du motif sur 5 séances (0-10 pts) : une baisse régulière ou un double creux (retest) marquent plus de points qu'un cumul identique obtenu par un aller-retour haussier/baissier sans direction nette | 20 |
             | Volume | ratio vs moyenne 20j, réduit de 70% si la séance est en forte hausse (un volume élevé en hausse n'est pas un signal d'opportunité) | 15 |
             | MACD | croisement haussier naissant de l'histogramme | 10 |
             | Range période | rampe continue selon la proximité du plus bas sur 1 an | 10 |
